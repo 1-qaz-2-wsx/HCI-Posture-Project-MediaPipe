@@ -31,6 +31,10 @@ options = vision.PoseLandmarkerOptions(
 detector = vision.PoseLandmarker.create_from_options(options)
 
 # ================= 3. 时序滤波器与动态校准变量 =================
+# 因为摄像头的画面会有光线抖动，AI 算出来的坐标每一帧都在微微颤抖。
+# 为了防止误报，搞一个滑动窗口（时序平滑），
+# 每次算角度不只看当前这一帧，而是把最近 8 帧的数据加起来除以 8（算平均值）。
+# 高频的抖动噪声被抹平。
 WINDOW_SIZE = 8  # 平滑窗口大小（帧数）
 angle_history = deque(maxlen=WINDOW_SIZE)
 z_history = deque(maxlen=WINDOW_SIZE)
@@ -43,7 +47,12 @@ base_z_diff = 0.0
 # 相对触发阈值（从基准坐姿偏离多少判定为异常）
 THRESHOLD_KYPHOSIS_DEVIATION = 8.0  # 耳肩夹角偏离标准坐姿 8 度以上判定为驼背
 # 优化正面深度：结合2D距离压缩与Z轴深度变化
+# 利用 MediaPipe 独特的 Z 轴（深度轴）。
+# MediaPipe 规定，越靠近摄像头，Z 值越小（负得越多）。
+# 脖子往前探时，鼻尖拼命靠近摄像头（Z 值暴跌），而肩膀靠在椅背上没动。
+# 代码用 肩膀Z - 鼻子Z，一旦探头，这个深度差值就会剧烈增大
 THRESHOLD_FORWARD_DEVIATION = 0.04   # 深度偏离 0.04 以上判定为探头
+
 
 cap = cv2.VideoCapture(0)
 start_time = time.time()
@@ -92,16 +101,16 @@ while True:
         
         # 实时计算原始解剖学特征
         shoulder_center_z = (left_shoulder.z + right_shoulder.z) / 2
-        raw_angle = calculate_angle_with_vertical(left_ear, left_shoulder)
-        raw_z_diff = shoulder_center_z - nose.z
+        raw_angle = calculate_angle_with_vertical(left_ear, left_shoulder) # 耳肩夹角 
+        raw_z_diff = shoulder_center_z - nose.z # 深度变化 
         
-        # ⚡ 【机制一】时序窗口动态平滑（抹平单帧噪声抖动）
+        #【机制一】时序窗口动态平滑（抹平单帧噪声抖动）
         angle_history.append(raw_angle)
         z_history.append(raw_z_diff)
         smooth_angle = sum(angle_history) / len(angle_history)
         smooth_z_diff = sum(z_history) / len(z_history)
         
-        # ================= 🚀 HCI 核心状态机行为分级 =================
+        # ================= 核心状态机行为分级 =================
         if not is_calibrated:
             status_text = "STATUS: PLEASE PRESS 'C' TO CALIBRATE YOUR POSTURE"
             status_color = (255, 150, 0)
@@ -154,7 +163,7 @@ while True:
     if key == ord('q'): 
         break
     elif key == ord('c') and detection_result.pose_landmarks:
-        # ⚡ 【机制二】一键校准：捕获当前平滑值作为用户的专属黄金坐姿原点
+        # 【机制二】：捕获当前平滑值作为用户的专属黄金坐姿原点
         base_angle = smooth_angle
         base_z_diff = smooth_z_diff
         is_calibrated = True
@@ -165,7 +174,7 @@ cv2.destroyAllWindows()
 
 # ================= 4. 自动化报告 =================
 if total_frames > 0:
-    print("\n" + "="*12 + " 🤖 高级人机交互（HCI）多维行为诊断报告 " + "="*12)
+    print("\n" + "="*12 + " 🤖 多维行为诊断报告 " + "="*12)
     print(f"核心检测内核: MediaPipe NextGen Tasks API (Frontal Calibration)")
     print(f"综合多模态健康评分 (Overall Compliance Score): {score}%")
     print(f"细分行为空间统计 (Sub-behavioral Classification Metrics):")
