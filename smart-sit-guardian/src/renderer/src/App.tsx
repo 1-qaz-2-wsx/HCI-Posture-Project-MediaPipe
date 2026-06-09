@@ -8,12 +8,14 @@ import TodoList from './pages/TodoList'
 import Pomodoro from './pages/Pomodoro'
 import Game from './pages/Game'
 import Profile from './pages/Profile'
+import Dashboard from './pages/Dashboard'
+
 //空组件占位
-const Dashboard = () => (
-  <div className="text-slate-500 font-light text-sm">
-    📊 正在构建 MediaPipe 坐姿多维行为诊断看板...
-  </div>
-)
+// const Dashboard = () => (
+//   <div className="text-slate-500 font-light text-sm">
+//     📊 正在构建 MediaPipe 坐姿多维行为诊断看板...
+//   </div>
+// )
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<string>('dashboard')

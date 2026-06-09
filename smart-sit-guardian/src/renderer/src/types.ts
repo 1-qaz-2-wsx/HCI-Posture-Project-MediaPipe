@@ -10,10 +10,12 @@ export interface Task {
 
 export interface PostureData {
   hasUser: boolean
+  isCalibrated: boolean // 新增是否已校准状态
   score: number
   angleDeviation: number
   zDeviation: number
   statusText: string
+  statusColor: 'green' | 'orange' | 'red' // 补上颜色状态
 }
 
 //统一的子页面通用接口规范
