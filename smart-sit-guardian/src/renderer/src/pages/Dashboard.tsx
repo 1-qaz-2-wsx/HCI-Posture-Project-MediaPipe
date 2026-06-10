@@ -31,29 +31,6 @@ export default function Dashboard() {
     angleDeviation: 0,
     zDeviation: 0
   })
-  // 在 Dashboard 组件内，useState 那些声明的旁边加
-  // const videoRef = useRef<HTMLVideoElement>(null)
-
-  // useEffect(() => {
-  //   let stream: MediaStream | null = null
-
-  //   navigator.mediaDevices
-  //     .getUserMedia({ video: true })
-  //     .then((s) => {
-  //       stream = s
-  //       if (videoRef.current) {
-  //         videoRef.current.srcObject = s
-  //       }
-  //     })
-  //     .catch((err) => {
-  //       console.error('摄像头获取失败:', err)
-  //     })
-
-  //   // 组件卸载时释放摄像头
-  //   return () => {
-  //     stream?.getTracks().forEach((track) => track.stop())
-  //   }
-  // }, [])
 
   // 2. 🌟 安全地从全局 window 中抽离出具备完整类型的 api 对象
   const pcieBridge = (window as any).api as PostureAPI | undefined
@@ -172,29 +149,12 @@ export default function Dashboard() {
               </span>
             </div>
           </div>
-          {/* 摄像头 */}
-          {/* <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            className="w-full rounded-2xl mt-4 object-cover"
-            style={{ maxHeight: '120px' }}
-          /> */}
-          {/* <div className="flex items-center gap-2 mt-5 text-xs text-slate-500 font-medium">
-            <Video
-              size={14}
-              className={data.hasUser ? 'text-emerald-500 animate-pulse' : 'text-slate-300'}
-            />
-            <span>
-              {data.hasUser ? 'MediaPipe 视频流交互就绪' : '未检测到用户，请正坐于相机前'}
-            </span>
-          </div> */}
+
           {data.image ? (
             <img
               src={data.image}
               alt="AI Posture Stream"
-              className="w-full rounded-2xl mt-4 object-cover transform scale-x-[-1]"
+              className="w-full rounded-2xl mt-4 object-cover "
               style={{ maxHeight: '180px' }}
             />
           ) : (
@@ -219,7 +179,15 @@ export default function Dashboard() {
             <div className="relative h-6 bg-slate-50 border border-slate-100 rounded-lg overflow-hidden flex items-center px-2">
               <motion.div
                 className="h-2 bg-blue-500 rounded-full"
-                animate={{ width: `${Math.min(Math.abs(data.angleDeviation) * 5, 100)}%` }}
+                animate={{
+                  width: `${data.angleDeviation > 0 ? Math.min(Math.abs(data.angleDeviation) * 5, 100) : 0}%`
+                }}
+                // 🌟 新增下方 transition 减震配置
+                transition={{
+                  type: 'tween', // 放弃默认的弹簧，改用线性/渐变过渡
+                  ease: 'easeOut', // 优雅淡出
+                  duration: 0.15 // 限制每次变化必须在 0.15 秒内平滑滑过去，不允许瞬间瞬移
+                }}
                 style={{ originX: 0 }}
               />
               <div
@@ -236,20 +204,28 @@ export default function Dashboard() {
           <div className="space-y-2">
             <div className="flex justify-between items-center text-xs">
               <span className="font-bold text-slate-600 flex items-center gap-1.5">
-                <ShieldAlert size={14} className="text-amber-500" /> 颈椎正面深度前倾 (Z轴)
+                <ShieldAlert size={14} className="text-amber-500" /> 颈椎前后体态重心 (Z轴)
               </span>
               <span className="font-mono font-bold bg-slate-50 text-slate-700 px-2 py-0.5 rounded-md">
-                {data.zDeviation > 0 ? `+${data.zDeviation}` : data.zDeviation}
+                {data.zDeviation > 0 ? `前倾 +${data.zDeviation}` : `后仰 ${data.zDeviation}`}
               </span>
             </div>
             <div className="relative h-6 bg-slate-50 border border-slate-100 rounded-lg overflow-hidden flex items-center px-2">
               <motion.div
                 className="h-2 bg-amber-500 rounded-full"
-                animate={{ width: `${Math.min(Math.abs(data.zDeviation) * 1000, 100)}%` }}
+                animate={{
+                  width: `${data.zDeviation > 0 ? Math.min(Math.abs(data.zDeviation) * 500, 100) : 0}%`
+                }}
+                // 🌟 新增下方 transition 减震配置
+                transition={{
+                  type: 'tween',
+                  ease: 'easeOut',
+                  duration: 0.15 // 阻断高频无意义的乱跳
+                }}
                 style={{ originX: 0 }}
               />
               <div
-                className="absolute left-[50%] top-0 bottom-0 w-0.5 bg-red-400/40 border-dashed"
+                className="absolute left-[20%] top-0 bottom-0 w-0.5 bg-red-400/40 border-dashed"
                 title="探头警戒线"
               />
             </div>

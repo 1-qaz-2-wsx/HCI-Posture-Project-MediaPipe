@@ -68,7 +68,7 @@ options = vision.PoseLandmarkerOptions(
 detector = vision.PoseLandmarker.create_from_options(options)
 
 # ================= 4. 校准变量 =================
-WINDOW_SIZE = 8
+WINDOW_SIZE = 15 # 增加平滑窗口大小，减少抖动
 angle_history = deque(maxlen=WINDOW_SIZE)
 z_history = deque(maxlen=WINDOW_SIZE)
 
