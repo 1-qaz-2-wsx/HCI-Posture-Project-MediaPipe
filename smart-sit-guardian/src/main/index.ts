@@ -1,10 +1,72 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
+import { spawn, ChildProcessWithoutNullStreams } from 'child_process'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
+// ── Python 子进程管理 ──────────────────────────────────────
+let pythonProcess: ChildProcessWithoutNullStreams | null = null
+
+function startPythonProcess(mainWindow: BrowserWindow): void {
+  // 根据开发/生产环境定位 main.py 的路径
+  const scriptPath = is.dev
+    ? join(__dirname, '../../core/main.py') // 开发时从项目根目录找
+    : join(process.resourcesPath, 'core/main.py') // 打包后从 resources 找
+
+  pythonProcess = spawn('python', [scriptPath])
+
+  // 用 buffer 拼接，防止一个 data 事件里只收到半行 JSON
+  let buffer = ''
+  pythonProcess.stdout.on('data', (data: Buffer) => {
+    buffer += data.toString()
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? '' // 最后一段可能不完整，留到下次拼
+
+    for (const line of lines) {
+      if (!line.trim()) continue
+      try {
+        const telemetry = JSON.parse(line)
+        // 推给渲染进程
+        if (!mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('posture-data', telemetry)
+        }
+      } catch {
+        // 忽略解析失败的行（比如 Python 的 print 调试输出）
+      }
+    }
+  })
+
+  pythonProcess.stderr.on('data', (data: Buffer) => {
+    console.error('[Python stderr]', data.toString())
+  })
+
+  pythonProcess.on('close', (code) => {
+    console.log(`[Python] 进程退出，code: ${code}`)
+    pythonProcess = null
+  })
+}
+
+function stopPythonProcess(): void {
+  if (pythonProcess) {
+    pythonProcess.stdin.write('q\n') // 先礼貌地让 Python 自己退出
+    setTimeout(() => {
+      if (pythonProcess) {
+        pythonProcess.kill() // 1 秒后还没退就强制杀掉
+        pythonProcess = null
+      }
+    }, 1000)
+  }
+}
+
+// ── 接收来自渲染进程的指令，转发给 Python stdin ────────────
+ipcMain.on('posture-command', (_event, command: string) => {
+  if (pythonProcess) {
+    pythonProcess.stdin.write(command + '\n')
+  }
+})
+
+// ── 窗口创建 ──────────────────────────────────────────────
 function createWindow(): void {
-  // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 900,
     height: 670,
@@ -19,6 +81,8 @@ function createWindow(): void {
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
+    // 窗口显示后再启动 Python，确保 webContents 已准备好接收数据
+    startPythonProcess(mainWindow)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -26,8 +90,6 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -35,40 +97,24 @@ function createWindow(): void {
   }
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
+// ── 应用生命周期 ───────────────────────────────────────────
 app.whenReady().then(() => {
-  // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
-  // Default open or close DevTools by F12 in development
-  // and ignore CommandOrControl + R in production.
-  // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
-
   createWindow()
 
   app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+  stopPythonProcess() // App 关闭时顺手杀掉 Python
   if (process.platform !== 'darwin') {
     app.quit()
   }
 })
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.

@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Activity, ShieldAlert, Video, RefreshCw, Compass } from 'lucide-react'
+import { useRef } from 'react'
 
 // 1. 🌟 定义专属于坐姿雷达的 IPC 桥梁契约接口
 interface PostureAPI {
@@ -29,6 +30,29 @@ export default function Dashboard() {
     angleDeviation: 0,
     zDeviation: 0
   })
+  // 在 Dashboard 组件内，useState 那些声明的旁边加
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    let stream: MediaStream | null = null
+
+    navigator.mediaDevices
+      .getUserMedia({ video: true })
+      .then((s) => {
+        stream = s
+        if (videoRef.current) {
+          videoRef.current.srcObject = s
+        }
+      })
+      .catch((err) => {
+        console.error('摄像头获取失败:', err)
+      })
+
+    // 组件卸载时释放摄像头
+    return () => {
+      stream?.getTracks().forEach((track) => track.stop())
+    }
+  }, [])
 
   // 2. 🌟 安全地从全局 window 中抽离出具备完整类型的 api 对象
   const pcieBridge = (window as any).api as PostureAPI | undefined
@@ -142,8 +166,16 @@ export default function Dashboard() {
               </span>
             </div>
           </div>
-
-          <div className="flex items-center gap-2 mt-5 text-xs text-slate-500 font-medium">
+          {/* 摄像头 */}
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            playsInline
+            className="w-full rounded-2xl mt-4 object-cover"
+            style={{ maxHeight: '120px' }}
+          />
+          {/* <div className="flex items-center gap-2 mt-5 text-xs text-slate-500 font-medium">
             <Video
               size={14}
               className={data.hasUser ? 'text-emerald-500 animate-pulse' : 'text-slate-300'}
@@ -151,7 +183,7 @@ export default function Dashboard() {
             <span>
               {data.hasUser ? 'MediaPipe 视频流交互就绪' : '未检测到用户，请正坐于相机前'}
             </span>
-          </div>
+          </div> */}
         </div>
 
         {/* 右侧：多维解剖学空间骨骼标尺 */}

@@ -7,7 +7,8 @@ import os
 import math
 import sys
 import json
-import select
+import threading
+import queue
 from collections import deque
 
 # ================= 1. 核心数学函数 =================
@@ -17,14 +18,30 @@ def calculate_angle_with_vertical(pt_upper, pt_lower):
     angle_radians = math.atan2(abs(dx), abs(dy))
     return math.degrees(angle_radians)
 
-# ================= 2. 初始化 MediaPipe 骨骼引擎 =================
+# ================= 2. 跨平台多线程非阻塞网络/管道读取 =================
+command_queue = queue.Queue()
+
+def electron_stream_reader():
+    """ 专门在后台死循环监听 Electron 发送过来的标准输入流 """
+    while True:
+        try:
+            line = sys.stdin.readline()
+            if not line:
+                break
+            command_queue.put(line.strip())
+        except Exception:
+            break
+
+# 启动守护线程，随主进程一同生死
+threading.Thread(target=electron_stream_reader, daemon=True).start()
+
+# ================= 3. 初始化 MediaPipe 骨骼引擎 =================
 MODEL_NAME = "pose_landmarker_full.task"
 if not os.path.exists(MODEL_NAME):
-    # 尝试在脚本所在目录寻找
     script_dir = os.path.dirname(os.path.abspath(__file__))
     MODEL_NAME = os.path.join(script_dir, MODEL_NAME)
     if not os.path.exists(MODEL_NAME):
-        sys.stdout.write(json.dumps({"hasUser": False, "statusText": "ERROR: 未找到核心模型文件 pose_landmarker_full.task"}) + "\n")
+        sys.stdout.write(json.dumps({"hasUser": False, "statusColor": "red", "statusText": "ERROR: 未找到模型文件 pose_landmarker_full.task"}) + "\n")
         sys.stdout.flush()
         sys.exit(1)
 
@@ -39,7 +56,7 @@ options = vision.PoseLandmarkerOptions(
 )
 detector = vision.PoseLandmarker.create_from_options(options)
 
-# ================= 3. 时序滤波器与动态校准变量 =================
+# ================= 4. 时序滤波器与动态校准变量 =================
 WINDOW_SIZE = 8
 angle_history = deque(maxlen=WINDOW_SIZE)
 z_history = deque(maxlen=WINDOW_SIZE)
@@ -51,19 +68,19 @@ base_z_diff = 0.0
 THRESHOLD_KYPHOSIS_DEVIATION = 8.0   # 驼背阈值
 THRESHOLD_FORWARD_DEVIATION = 0.04   # 探头阈值
 
+#检查摄像头是否成功开启
 cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    sys.stdout.write(json.dumps({"hasUser": False, "statusColor": "red", "statusText": "ERROR: 无法打开摄像头，请检查是否被其他软件占用"}) + "\n")
+    sys.stdout.flush()
+    sys.exit(1)
+
 start_time = time.time()
 total_frames = 0
 good_frames = 0
 kyphosis_frames = 0
 forward_frames = 0
 score = 100
-
-# 让标准输入流变成非阻塞模式，用来接收前端发来的校准信号
-if sys.platform != 'win32':
-    import fcntl
-    fl = fcntl.fcntl(sys.stdin, fcntl.F_GETFL)
-    fcntl.fcntl(sys.stdin, fcntl.F_SETFL, fl | os.O_NONBLOCK)
 
 while True:
     success, img = cap.read()
@@ -73,16 +90,12 @@ while True:
     img = cv2.flip(img, 1) 
     h_img, w_img, _ = img.shape
     
-    # 检查前端有没有发指令过来（比如用户在前端点击了“录入标准坐姿”按钮）
+    # 从后台线程队列中安全地抓取前端下发的指令 (非阻塞)
     cmd = ""
-    if sys.platform == 'win32':
-        import msvcrt
-        if msvcrt.kbhit():
-            cmd = sys.stdin.readline().strip()
-    else:
-        r, _, _ = select.select([sys.stdin], [], [], 0)
-        if r:
-            cmd = sys.stdin.readline().strip()
+    try:
+        cmd = command_queue.get_nowait()
+    except queue.Empty:
+        pass
 
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
@@ -113,7 +126,7 @@ while True:
         smooth_angle = sum(angle_history) / len(angle_history)
         smooth_z_diff = sum(z_history) / len(z_history)
         
-        # 监听外部发来的校准命令
+        # 响应指令
         if cmd == "c" or cmd == "calibrate":
             base_angle = smooth_angle
             base_z_diff = smooth_z_diff
@@ -163,13 +176,15 @@ while True:
             "zDeviation": 0
         }
 
-    #发射回前端
+    # 发射回前端
+    #把数据以 JSON 格式一行行打印到 stdout。
+    #当 Python 被 Electron 作为子进程启动时，这个流会被 Electron 的 Node.js 代码接管和读取。
     sys.stdout.write(json.dumps(telemetry_data) + "\n")
     sys.stdout.flush()
     
     if cmd == "q" or cmd == "quit":
         break
         
-    time.sleep(0.04) # 限制 25 帧左右，防止前端数据通道挤压
+    time.sleep(0.04)
 
 cap.release()
