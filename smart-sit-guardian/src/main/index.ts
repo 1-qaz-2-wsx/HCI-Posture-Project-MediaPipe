@@ -1,8 +1,12 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
-import { join } from 'path'
+import path, { join } from 'path'
 import { spawn, ChildProcessWithoutNullStreams } from 'child_process'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+// import {creatInterface} from 'readline'
+
+//动态计算虚拟环境python路径
+const pythonExecutable = path.resolve(__dirname, '../../core/.venv/Scripts/python.exe')
 
 // ── Python 子进程管理 ──────────────────────────────────────
 let pythonProcess: ChildProcessWithoutNullStreams | null = null
@@ -13,25 +17,38 @@ function startPythonProcess(mainWindow: BrowserWindow): void {
     ? join(__dirname, '../../core/main.py') // 开发时从项目根目录找
     : join(process.resourcesPath, 'core/main.py') // 打包后从 resources 找
 
-  pythonProcess = spawn('python', [scriptPath])
+  pythonProcess = spawn(pythonExecutable, [scriptPath])
 
   // 用 buffer 拼接，防止一个 data 事件里只收到半行 JSON
   let buffer = ''
+  let pendingTelemetry: object | null = null // 暂存上一行解析好的 JSON
+
   pythonProcess.stdout.on('data', (data: Buffer) => {
+    console.log('[RAW stdout length]', data.length, data.toString().slice(0, 100))
     buffer += data.toString()
     const lines = buffer.split('\n')
     buffer = lines.pop() ?? '' // 最后一段可能不完整，留到下次拼
 
     for (const line of lines) {
       if (!line.trim()) continue
-      try {
-        const telemetry = JSON.parse(line)
-        // 推给渲染进程
-        if (!mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('posture-data', telemetry)
+
+      if (line.startsWith('IMG:')) {
+        // 这是图片行，和之前暂存的 JSON 合并后一起推给前端
+        if (pendingTelemetry && !mainWindow.isDestroyed()) {
+          const imgDataUrl = 'data:image/jpeg;base64,' + line.slice(4)
+          mainWindow.webContents.send('posture-data', {
+            ...pendingTelemetry,
+            image: imgDataUrl
+          })
+          pendingTelemetry = null
         }
-      } catch {
-        // 忽略解析失败的行（比如 Python 的 print 调试输出）
+      } else {
+        // 这是数据 JSON 行，先暂存
+        try {
+          pendingTelemetry = JSON.parse(line)
+        } catch {
+          // 忽略解析失败的行
+        }
       }
     }
   })

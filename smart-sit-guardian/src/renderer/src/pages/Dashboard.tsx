@@ -18,6 +18,7 @@ interface TelemetryData {
   score: number
   angleDeviation: number
   zDeviation: number
+  image?: string
 }
 
 export default function Dashboard() {
@@ -31,40 +32,45 @@ export default function Dashboard() {
     zDeviation: 0
   })
   // 在 Dashboard 组件内，useState 那些声明的旁边加
-  const videoRef = useRef<HTMLVideoElement>(null)
+  // const videoRef = useRef<HTMLVideoElement>(null)
 
-  useEffect(() => {
-    let stream: MediaStream | null = null
+  // useEffect(() => {
+  //   let stream: MediaStream | null = null
 
-    navigator.mediaDevices
-      .getUserMedia({ video: true })
-      .then((s) => {
-        stream = s
-        if (videoRef.current) {
-          videoRef.current.srcObject = s
-        }
-      })
-      .catch((err) => {
-        console.error('摄像头获取失败:', err)
-      })
+  //   navigator.mediaDevices
+  //     .getUserMedia({ video: true })
+  //     .then((s) => {
+  //       stream = s
+  //       if (videoRef.current) {
+  //         videoRef.current.srcObject = s
+  //       }
+  //     })
+  //     .catch((err) => {
+  //       console.error('摄像头获取失败:', err)
+  //     })
 
-    // 组件卸载时释放摄像头
-    return () => {
-      stream?.getTracks().forEach((track) => track.stop())
-    }
-  }, [])
+  //   // 组件卸载时释放摄像头
+  //   return () => {
+  //     stream?.getTracks().forEach((track) => track.stop())
+  //   }
+  // }, [])
 
   // 2. 🌟 安全地从全局 window 中抽离出具备完整类型的 api 对象
   const pcieBridge = (window as any).api as PostureAPI | undefined
 
   // 监听来自 Electron 主进程管道传输进来的实时 AI 数据
   useEffect(() => {
+    console.log('[Dashboard] pcieBridge:', pcieBridge)
     if (pcieBridge && pcieBridge.onPostureData) {
       pcieBridge.onPostureData((telemetry: TelemetryData) => {
+        console.log('[Dashboard] telemetry received:', telemetry)
         setData(telemetry)
       })
     }
-  }, [])
+    return () => {
+      ;(window as any).api?.removePostureListener?.()
+    }
+  }, []) // ← 空数组，只注册一次
 
   // HCI 核心交互：点击向后台正在运行的 Python 写入校准命令 'c'
   const handleCalibrate = () => {
@@ -167,14 +173,14 @@ export default function Dashboard() {
             </div>
           </div>
           {/* 摄像头 */}
-          <video
+          {/* <video
             ref={videoRef}
             autoPlay
             muted
             playsInline
             className="w-full rounded-2xl mt-4 object-cover"
             style={{ maxHeight: '120px' }}
-          />
+          /> */}
           {/* <div className="flex items-center gap-2 mt-5 text-xs text-slate-500 font-medium">
             <Video
               size={14}
@@ -184,6 +190,18 @@ export default function Dashboard() {
               {data.hasUser ? 'MediaPipe 视频流交互就绪' : '未检测到用户，请正坐于相机前'}
             </span>
           </div> */}
+          {data.image ? (
+            <img
+              src={data.image}
+              alt="AI Posture Stream"
+              className="w-full rounded-2xl mt-4 object-cover transform scale-x-[-1]"
+              style={{ maxHeight: '180px' }}
+            />
+          ) : (
+            <div className="w-full h-[120px] bg-slate-100 rounded-2xl mt-4 flex items-center justify-center text-xs text-slate-400 font-mono animate-pulse">
+              LOADING AI PIPELINE...
+            </div>
+          )}
         </div>
 
         {/* 右侧：多维解剖学空间骨骼标尺 */}
