@@ -1,10 +1,12 @@
+// src/renderer/src/components/Sidebar.tsx
 import React from 'react'
 import { motion } from 'framer-motion'
-import { LayoutDashboard, CheckSquare, Timer, User, Gamepad2, Shield } from 'lucide-react'
+import { LayoutDashboard, CheckSquare, User, Shield, Zap, Gamepad2 } from 'lucide-react'
 
 interface MenuItem {
   id: string
   name: string
+  sub: string
   icon: React.ComponentType<{ size: number }>
 }
 
@@ -15,51 +17,55 @@ interface SidebarProps {
 
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   const menuItems: MenuItem[] = [
-    { id: 'dashboard', name: '健康看板', icon: LayoutDashboard },
-    { id: 'todo', name: '待办清单', icon: CheckSquare },
-    { id: 'pomodoro', name: '效率番茄', icon: Timer },
-    { id: 'profile', name: '我的数据', icon: User },
-    { id: 'game', name: '解压舱', icon: Gamepad2 }
+    { id: 'dashboard', name: '坐姿看板', sub: '实时骨骼检测', icon: LayoutDashboard },
+    { id: 'focus', name: '专注舱', sub: '番茄 + 任务 + 坐姿', icon: Zap },
+    { id: 'relax', name: '解压舱', sub: '三款解压小游戏', icon: Gamepad2 },
+    { id: 'profile', name: '健康档案', sub: '数据与成就', icon: User },
+    { id: 'todo', name: '待办清单', sub: '任务管理', icon: CheckSquare }
   ]
 
   return (
-    <div className="w-64 h-full bg-white flex flex-col p-6 border-r border-slate-100 select-none">
-      {/* 头部高级系统 Logo */}
-      <div className="flex items-center gap-3 px-2 mb-10">
+    <div className="w-60 h-full bg-white flex flex-col p-5 border-r border-slate-100 select-none shrink-0">
+      <div className="flex items-center gap-3 px-2 mb-8">
         <div className="w-9 h-9 bg-gradient-to-tr from-emerald-500 to-teal-400 rounded-xl flex items-center justify-center text-white shadow-md shadow-emerald-100">
-          <Shield size={20} className="animate-pulse" />
+          <Shield size={18} className="animate-pulse" />
         </div>
         <div>
-          <h1 className="font-bold text-base text-slate-800 tracking-tight">智慧坐姿卫士</h1>
+          <h1 className="font-bold text-sm text-slate-800 tracking-tight">智慧坐姿卫士</h1>
           <p className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">
             Posture Guardian
           </p>
         </div>
       </div>
 
-      {/* 导航核心菜单 */}
-      <div className="flex flex-col gap-2 relative">
+      <div className="flex flex-col gap-1.5 relative">
         {menuItems.map((item) => {
           const isActive = activeTab === item.id
           const Icon = item.icon
-
           return (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl text-sm font-medium transition-colors relative z-10 ${
-                isActive ? 'text-emerald-600' : 'text-slate-500 hover:text-slate-800'
+              className={`flex items-center gap-3 px-3 py-3 rounded-2xl text-left transition-colors relative z-10 ${
+                isActive ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              <Icon size={18} />
-              <span>{item.name}</span>
-
-              {/* 液体动态高亮指示器*/}
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                  isActive ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-50 text-slate-400'
+                }`}
+              >
+                <Icon size={16} />
+              </div>
+              <div>
+                <div className="text-sm font-semibold leading-tight">{item.name}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">{item.sub}</div>
+              </div>
               {isActive && (
                 <motion.div
                   layoutId="activeIndicator"
                   transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                  className="absolute inset-0 bg-emerald-50/60 rounded-2xl -z-10 border border-emerald-100/50"
+                  className="absolute inset-0 bg-emerald-50/70 rounded-2xl -z-10 border border-emerald-100/60"
                 />
               )}
             </button>
@@ -67,11 +73,10 @@ export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
         })}
       </div>
 
-      {/* 底部贴心小助手看板 */}
-      <div className="mt-auto bg-slate-50 border border-slate-100 rounded-2xl p-4">
-        <div className="text-xs font-semibold text-slate-600 mb-1">📋 科学交互提示</div>
-        <p className="text-[11px] text-slate-400 leading-relaxed">
-          根据工效学模型，学生群体建议每 45 分钟起立活动，或使用解压舱进行手势微休息。
+      <div className="mt-auto bg-slate-50 border border-slate-100 rounded-2xl p-3.5">
+        <div className="text-xs font-semibold text-slate-600 mb-1">📋 科学提示</div>
+        <p className="text-[10px] text-slate-400 leading-relaxed">
+          每 45 分钟起立活动，或前往解压舱进行手势微休息。
         </p>
       </div>
     </div>
