@@ -1,368 +1,204 @@
 // src/renderer/src/pages/FocusStation.tsx
-import React, { useState, useEffect, useRef } from 'react'
+import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Play, Square, RefreshCw, Coffee, Brain, Target, Wind, Leaf } from 'lucide-react'
-import confetti from 'canvas-confetti'
-import { Task, SharedTodoProps } from '../types'
+import { Play, Square, Coffee, Target, Sparkles, HelpCircle, Video } from 'lucide-react'
+import { Task } from '../types'
 
-// 坐姿小窗：复用 window.api，compact 模式只显示视频画面和状态色
-function PostureMiniWindow() {
-  const [imgSrc, setImgSrc] = useState<string | null>(null)
-  const [statusColor, setStatusColor] = useState<'green' | 'orange' | 'red'>('orange')
-
-  useEffect(() => {
-    const api = (window as any).api
-    if (!api?.onPostureData) return
-    api.onPostureData((t: any) => {
-      if (t.image) setImgSrc(t.image)
-      if (t.statusColor) setStatusColor(t.statusColor)
-    })
-    return () => api.removePostureListener?.()
-  }, [])
-
-  const ringColor =
-    statusColor === 'green'
-      ? 'ring-emerald-400'
-      : statusColor === 'red'
-        ? 'ring-rose-400 animate-pulse'
-        : 'ring-amber-400'
-
-  return (
-    <div
-      className={`relative rounded-2xl overflow-hidden ring-2 ${ringColor} transition-all duration-500`}
-      style={{ width: 160, height: 112 }}
-    >
-      {imgSrc ? (
-        <img src={imgSrc} className="w-full h-full object-cover" alt="posture" />
-      ) : (
-        <div className="w-full h-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400 font-mono">
-          等待 AI 内核...
-        </div>
-      )}
-      <div
-        className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ${
-          statusColor === 'green'
-            ? 'bg-emerald-400'
-            : statusColor === 'red'
-              ? 'bg-rose-400'
-              : 'bg-amber-400'
-        }`}
-      />
-    </div>
-  )
-}
-
-interface FocusStationProps extends SharedTodoProps {
+interface FocusStationProps {
+  tasks: Task[]
+  setTasks: any
+  activeTaskId: string | null
+  setActiveTaskId: any
   goToRelax: () => void
   goToTodo: () => void
+  goToDashboard: () => void
+  timerMode: 'work' | 'break' | 'idle'
+  setTimerMode: (mode: 'work' | 'break' | 'idle') => void
+  timeLeft: number
+  setTimeLeft: (time: number) => void
+  isTimerRunning: boolean
+  setIsTimerRunning: (run: boolean) => void
+  formatTime: (sec: number) => string
 }
-
-const FOCUS_TIME = 25 * 60
-const BREAK_TIME = 5 * 60
 
 export default function FocusStation({
   tasks,
-  setTasks,
   activeTaskId,
-  setActiveTaskId,
   goToRelax,
-  goToTodo
+  goToTodo,
+  goToDashboard,
+  timerMode,
+  setTimerMode,
+  timeLeft,
+  setTimeLeft,
+  isTimerRunning,
+  setIsTimerRunning,
+  formatTime
 }: FocusStationProps) {
-  const [timeLeft, setTimeLeft] = useState(FOCUS_TIME)
-  const [isRunning, setIsRunning] = useState(false)
-  const [mode, setMode] = useState<'focus' | 'break'>('focus')
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
-  const currentTask = tasks.find((t) => t.id === activeTaskId) || null
+  const currentTask = tasks.find((t) => t.id === activeTaskId)
 
-  useEffect(() => {
-    if (isRunning && timeLeft > 0) {
-      timerRef.current = setInterval(() => setTimeLeft((p) => p - 1), 1000)
-    } else if (timeLeft === 0) {
-      handleCycleComplete()
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
-    }
-  }, [isRunning, timeLeft])
-
-  const handleCycleComplete = () => {
-    setIsRunning(false)
-    confetti({
-      particleCount: 180,
-      spread: 100,
-      origin: { y: 0.6 },
-      colors: ['#3B82F6', '#10B981', '#F59E0B']
-    })
-    if (mode === 'focus') {
-      if (activeTaskId) {
-        setTasks((prev) => prev.map((t) => (t.id === activeTaskId ? { ...t, completed: true } : t)))
-        setActiveTaskId(null)
-      }
-      setMode('break')
-      setTimeLeft(BREAK_TIME)
-    } else {
-      setMode('focus')
-      setTimeLeft(FOCUS_TIME)
-    }
+  const startFocus = () => {
+    setTimerMode('work')
+    setTimeLeft(25 * 60)
+    setIsTimerRunning(true)
   }
 
-  const fmt = (s: number) =>
-    `${Math.floor(s / 60)
-      .toString()
-      .padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`
+  const stopFocus = () => {
+    setIsTimerRunning(false)
+    setTimerMode('idle')
+    setTimeLeft(25 * 60)
+  }
 
-  const total = mode === 'focus' ? FOCUS_TIME : BREAK_TIME
-  const progress = (total - timeLeft) / total
-  const dashOffset = 440 - 440 * progress
+  const triggerRelax = () => {
+    setTimerMode('break')
+    setTimeLeft(5 * 60)
+    setIsTimerRunning(true)
+    goToRelax()
+  }
 
-  // ══ 休息模式：静谧全屏 ══
-  if (mode === 'break') {
-    return (
-      <motion.div
-        key="break"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="h-full flex flex-col items-center justify-center gap-8 relative"
-        style={{ background: 'linear-gradient(160deg,#f0fdf4 0%,#ecfdf5 40%,#f0f9ff 100%)' }}
-      >
-        {/* 静谧背景装饰 */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {[...Array(6)].map((_, i) => (
-            <motion.div
-              key={i}
-              className="absolute rounded-full bg-emerald-100/40"
-              style={{
-                width: 80 + i * 40,
-                height: 80 + i * 40,
-                left: `${10 + i * 15}%`,
-                top: `${20 + (i % 3) * 25}%`
-              }}
-              animate={{ scale: [1, 1.08, 1], opacity: [0.3, 0.5, 0.3] }}
-              transition={{ duration: 4 + i, repeat: Infinity, ease: 'easeInOut' }}
-            />
-          ))}
-        </div>
+  // 🌟 核心机制 (2): 广播唤浮窗复位事件，让小画面瞬间闪现到视网膜中央
+  const handleSummonDeck = () => {
+    window.dispatchEvent(new CustomEvent('summon-posture-deck'))
+  }
 
-        <div className="relative z-10 flex flex-col items-center gap-2">
-          <div className="w-12 h-12 bg-emerald-100 rounded-2xl flex items-center justify-center">
-            <Leaf size={24} className="text-emerald-600" />
+  const totalSeconds = timerMode === 'work' ? 25 * 60 : timerMode === 'break' ? 5 * 60 : 25 * 60
+  const progressPercent = timerMode !== 'idle' ? (timeLeft / totalSeconds) * 100 : 100
+
+  return (
+    <div className="h-full w-full flex flex-col gap-4 relative min-h-[460px] bg-transparent">
+      {/* 主控制面板 */}
+      <div className="flex-1 flex flex-col items-center justify-center bg-slate-50/60 border border-slate-100 rounded-3xl p-6 shadow-3xs">
+        {/* 顶部提示与复位中控台 */}
+        <div className="mb-6 flex flex-wrap items-center justify-center gap-3">
+          <div className="bg-amber-50/80 border border-amber-100 rounded-xl px-4 py-2 flex items-center gap-2 text-xs text-amber-800 shadow-3xs">
+            <HelpCircle size={14} className="text-amber-500 animate-pulse" />
+            <span>姿态监测不准？</span>
+            <button
+              onClick={goToDashboard}
+              className="text-amber-600 font-bold hover:underline cursor-pointer"
+            >
+              前往[坐姿看板]一键校准 ➔
+            </button>
           </div>
-          <h2 className="text-2xl font-light text-slate-700 tracking-wide">正念微休</h2>
-          <p className="text-sm text-slate-400">深呼吸，放松肩膀，闭上眼睛</p>
+
+          {/* 🌟 核心调优 (2): 用户调起摄像头的绝对安全开关 */}
+          {/* <button
+            onClick={handleSummonDeck}
+            className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-800 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-3xs transition-all active:scale-95 cursor-pointer"
+          >
+            <Video size={13} className="text-blue-500" />
+            <span>📷 唤醒/重置悬浮小画面</span>
+          </button> */}
         </div>
 
-        {/* 休息倒计时 */}
-        <div className="relative z-10 w-48 h-48 flex items-center justify-center">
-          <svg className="w-full h-full -rotate-90" viewBox="0 0 160 160">
+        {/* 精准无残缺进度圆环 */}
+        <div className="relative w-56 h-56 rounded-full bg-white shadow-xl flex items-center justify-center border border-slate-100/80 mb-6">
+          <svg
+            className="absolute inset-0 w-full h-full transform -rotate-90"
+            viewBox="0 0 200 200"
+          >
             <circle
-              cx="80"
-              cy="80"
-              r="70"
-              className="stroke-emerald-50 fill-none"
+              cx="100"
+              cy="100"
+              r="90"
+              className="stroke-slate-100 fill-none"
               strokeWidth="6"
             />
             <motion.circle
-              cx="80"
-              cy="80"
-              r="70"
-              className="fill-none"
+              cx="100"
+              cy="100"
+              r="90"
+              // 🌟 核心调优 (1): 颜色与全局弹出条完美一致！Work时为标准心流蓝 (blue-500)
+              className={`fill-none ${timerMode === 'break' ? 'stroke-emerald-500' : 'stroke-blue-500'}`}
               strokeWidth="6"
-              stroke="#10b981"
-              strokeDasharray="440"
-              animate={{ strokeDashoffset: dashOffset }}
-              transition={{ duration: 1, ease: 'linear' }}
+              strokeDasharray={2 * Math.PI * 90}
+              animate={{ strokeDashoffset: 2 * Math.PI * 90 * (1 - progressPercent / 100) }}
+              transition={{ ease: 'linear' }}
             />
           </svg>
-          <div className="absolute flex flex-col items-center">
-            <span className="text-4xl font-light text-slate-700 font-mono tracking-tighter">
-              {fmt(timeLeft)}
-            </span>
-            <span className="text-[10px] text-emerald-500 font-semibold tracking-widest uppercase mt-1">
-              休息中
-            </span>
-          </div>
-        </div>
 
-        {/* 操作按钮 */}
-        <div className="relative z-10 flex items-center gap-4">
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => setIsRunning(!isRunning)}
-            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-emerald-600 text-white text-sm font-semibold shadow-md shadow-emerald-100"
-          >
-            {isRunning ? <Square size={15} fill="white" /> : <Play size={15} fill="white" />}
-            <span>{isRunning ? '暂停' : '开始休息'}</span>
-          </motion.button>
-
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={goToRelax}
-            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-white border border-emerald-100 text-emerald-700 text-sm font-semibold shadow-sm"
-          >
-            <Wind size={15} />
-            <span>去解压舱</span>
-          </motion.button>
-
-          <motion.button
-            whileHover={{ scale: 1.05, rotate: 180 }}
-            whileTap={{ scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-            onClick={() => {
-              setMode('focus')
-              setTimeLeft(FOCUS_TIME)
-              setIsRunning(false)
-            }}
-            className="p-3 rounded-2xl bg-white border border-slate-100 text-slate-400"
-          >
-            <RefreshCw size={15} />
-          </motion.button>
-        </div>
-      </motion.div>
-    )
-  }
-
-  // ══ 专注模式 ══
-  return (
-    <motion.div
-      key="focus"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="h-full flex flex-col gap-5 select-none max-w-3xl mx-auto"
-    >
-      {/* 顶部：模式切换标签 */}
-      <div className="bg-slate-100 p-1.5 rounded-2xl flex gap-1.5 w-fit self-center relative">
-        <div className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold text-slate-700 relative z-10">
-          <Brain size={15} className="text-blue-600" />
-          <span>深度专注</span>
-        </div>
-        <div className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold text-slate-400 relative z-10">
-          <Coffee size={15} className="text-slate-300" />
-          <span>正念微休</span>
-        </div>
-        <motion.div
-          animate={{ x: 0 }}
-          className="absolute top-1.5 bottom-1.5 left-1.5 w-[112px] rounded-xl bg-white border border-blue-100 shadow-sm -z-0"
-        />
-      </div>
-
-      {/* 主体：左侧计时 + 右侧坐姿小窗 */}
-      <div className="flex-1 flex gap-6 items-start">
-        {/* 左侧：计时环 + 任务卡 */}
-        <div className="flex-1 flex flex-col items-center gap-6">
-          <div className="relative w-56 h-56 flex items-center justify-center">
-            <svg className="w-full h-full -rotate-90" viewBox="0 0 160 160">
-              <circle
-                cx="80"
-                cy="80"
-                r="70"
-                className="stroke-slate-50 fill-none"
-                strokeWidth="8"
-              />
-              <motion.circle
-                cx="80"
-                cy="80"
-                r="70"
-                className="fill-none"
-                strokeWidth="8"
-                stroke="#3B82F6"
-                strokeDasharray="440"
-                animate={{ strokeDashoffset: dashOffset }}
-                transition={{ duration: 1, ease: 'linear' }}
-              />
-            </svg>
-            <div className="absolute flex flex-col items-center">
-              <span className="text-5xl font-light text-slate-800 font-mono tracking-tighter">
-                {fmt(timeLeft)}
-              </span>
-              <span className="text-[10px] text-blue-500 font-bold tracking-widest uppercase mt-2">
-                {isRunning ? '专注流淌中' : '心流准备就绪'}
-              </span>
+          {/* 数字中心 */}
+          <div className="text-center z-10">
+            <div className="text-4xl font-black font-mono tracking-tight text-slate-800">
+              {formatTime(timeLeft)}
+            </div>
+            <div className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mt-1">
+              {timerMode === 'work'
+                ? '🔥 FOCUSING'
+                : timerMode === 'break'
+                  ? '🍃 RELAXING'
+                  : '⏱️ STANDBY'}
             </div>
           </div>
+        </div>
 
-          {/* 控制按钮 */}
-          <div className="flex items-center gap-4">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setIsRunning(!isRunning)}
-              className={`flex items-center gap-2 px-8 py-3.5 rounded-2xl font-semibold text-sm shadow-md ${
-                isRunning
-                  ? 'bg-amber-500 text-white shadow-amber-100'
-                  : 'bg-blue-600 text-white shadow-blue-100'
-              }`}
+        {/* 操控按钮与卡片：颜色同样对齐全局条 */}
+        <div className="flex flex-col items-center gap-4 w-64">
+          {!isTimerRunning ? (
+            <button
+              onClick={startFocus}
+              // 🌟 核心调优 (1): 按钮底色同步改为心流蓝
+              className="w-full bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-bold py-3 px-6 rounded-2xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer text-sm"
             >
-              {isRunning ? <Square size={15} fill="white" /> : <Play size={15} fill="white" />}
-              <span>{isRunning ? '暂停专注' : '开启心流'}</span>
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05, rotate: 180 }}
-              whileTap={{ scale: 0.95 }}
-              transition={{ type: 'spring', stiffness: 200, damping: 15 }}
-              onClick={() => {
-                setIsRunning(false)
-                setMode('focus')
-                setTimeLeft(FOCUS_TIME)
-              }}
-              className="p-3.5 rounded-2xl bg-white border border-slate-100 text-slate-400"
+              <Play size={16} fill="white" />
+              <span>开启心流（25 Mins）</span>
+            </button>
+          ) : (
+            <button
+              onClick={stopFocus}
+              className="w-full bg-slate-100 hover:bg-slate-200 active:scale-98 text-slate-600 font-bold py-3 px-6 rounded-2xl shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer text-sm border border-slate-200"
             >
-              <RefreshCw size={15} />
-            </motion.button>
-          </div>
+              <Square size={14} fill="currentColor" />
+              <span>放弃并结束本次心流</span>
+            </button>
+          )}
 
-          {/* 任务绑定 */}
+          {/* 专注引导任务卡片 */}
           <AnimatePresence mode="wait">
             {currentTask ? (
               <motion.div
-                key="task"
-                initial={{ opacity: 0, y: 8 }}
+                key="has-task"
+                initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                className="w-full max-w-xs bg-blue-50/60 border border-blue-100 rounded-2xl p-3.5 flex items-center gap-3"
+                exit={{ opacity: 0, y: -5 }}
+                // 🌟 核心调优 (1): 锁定焦点卡片改为浅蓝风格，与顶部完美呼应
+                className="w-full bg-blue-50/60 border border-blue-100 rounded-xl p-3 flex items-center gap-2"
               >
-                <div className="w-8 h-8 bg-blue-500 text-white rounded-xl flex items-center justify-center shrink-0 animate-pulse">
+                <div className="p-1.5 rounded-lg bg-blue-600 text-white shadow-2xs">
                   <Target size={14} />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[10px] font-bold text-blue-400 tracking-wider uppercase">
-                    当前专注目标
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="text-[9px] font-black text-blue-600 tracking-wide uppercase">
+                    当前锁定焦点
                   </div>
-                  <p className="text-sm font-medium text-blue-900 truncate mt-0.5">
+                  <p className="text-xs font-semibold text-blue-900 truncate mt-0.5">
                     {currentTask.text}
                   </p>
                 </div>
               </motion.div>
             ) : (
-              <motion.p
-                key="no-task"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-xs text-slate-400 text-center max-w-xs"
+              <button
+                onClick={goToTodo}
+                className="w-full border border-dashed border-slate-200 hover:border-slate-300 rounded-xl p-3 text-xs text-slate-400 hover:text-slate-500 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
-                💡 前往{' '}
-                <button
-                  onClick={goToTodo}
-                  className="font-semibold text-slate-600 underline underline-offset-2"
-                >
-                  待办清单
-                </button>{' '}
-                绑定一个任务到此专注环
-              </motion.p>
+                <Sparkles size={13} className="text-amber-500" />
+                <span>待办清单为空，点击绑定聚焦指标</span>
+              </button>
             )}
           </AnimatePresence>
-        </div>
 
-        {/* 右侧：坐姿小窗 + 提示 */}
-        <div className="flex flex-col gap-4 items-center pt-4">
-          <div className="text-xs font-semibold text-slate-500 tracking-wide">坐姿实时监测</div>
-          <PostureMiniWindow />
-          <p className="text-[10px] text-slate-400 text-center w-40 leading-relaxed">
-            专注期间 AI 实时监测你的坐姿，绿色表示姿态良好
-          </p>
+          {/* 正念微休快捷跳转入口 */}
+          {timerMode === 'idle' && (
+            <button
+              onClick={triggerRelax}
+              className="text-xs font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-1.5 mt-1 transition-colors cursor-pointer hover:underline"
+            >
+              <Coffee size={13} />
+              <span>累了？点击直接开启【正念微休】</span>
+            </button>
+          )}
         </div>
       </div>
-    </motion.div>
+    </div>
   )
 }
