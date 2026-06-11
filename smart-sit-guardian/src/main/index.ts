@@ -96,6 +96,23 @@ function createWindow(): void {
     }
   })
 
+  // 放开 CSP，允许加载 jsdelivr CDN 脚本（MediaPipe Hands 用）
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'; " +
+            "script-src 'self' https://cdn.jsdelivr.net; " +
+            "connect-src 'self' https://cdn.jsdelivr.net wss: blob:; " +
+            "img-src 'self' data: blob:; " +
+            "media-src 'self' blob:; " +
+            'worker-src blob:;'
+        ]
+      }
+    })
+  })
+
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
     // 窗口显示后再启动 Python，确保 webContents 已准备好接收数据

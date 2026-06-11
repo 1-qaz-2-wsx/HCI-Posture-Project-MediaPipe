@@ -1,301 +1,217 @@
 // src/renderer/src/components/PostureFloatDeck.tsx
 import React, { useState, useEffect, useRef } from 'react'
-import { GripHorizontal, Minus, Video, Compass } from 'lucide-react'
+import { GripHorizontal, Minus, Maximize2, X, Video } from 'lucide-react'
 
 interface PostureFloatDeckProps {
-  timeLeftStr: string
-  taskText: string
-  timerMode: 'work' | 'break' | 'idle'
+  imgSrc: string | null
+  statusColor: 'green' | 'orange' | 'red'
+  isDashboard: boolean // 进入坐姿看板时自动折叠并靠左
+  onClose: () => void
 }
 
 export default function PostureFloatDeck({
-  timeLeftStr,
-  taskText,
-  timerMode
+  imgSrc,
+  statusColor,
+  isDashboard,
+  onClose
 }: PostureFloatDeckProps) {
-  const [imgSrc, setImgSrc] = useState<string | null>(null)
-  const [statusColor, setStatusColor] = useState<'green' | 'orange' | 'red'>('orange')
-
-  // 基础状态：位置与大小
   const [position, setPosition] = useState({ x: 740, y: 80 })
   const [size, setSize] = useState({ width: 230, height: 190 })
   const [isMinimized, setIsMinimized] = useState(false)
 
-  // 原生操控辅助 Ref
-  const [isDragging, setIsDragging] = useState(false)
-  const [isResizing, setIsResizing] = useState(false)
+  const isDragging = useRef(false)
+  const isResizing = useRef(false)
+  const dragOffset = useRef({ x: 0, y: 0 })
+  const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0, px: 0, py: 0 })
+  const resizeDir = useRef('')
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  const dragStart = useRef({ x: 0, y: 0 })
-  const resizeStart = useRef({ x: 0, y: 0, width: 0, height: 0, left: 0, top: 0 })
-  const resizeDir = useRef<string>('')
-
-  // 接收数据通道
+  // 进入坐姿看板时自动折叠到左上方
   useEffect(() => {
-    const api = (window as any).api
-    if (!api?.onPostureData) return
-    api.onPostureData((t: any) => {
-      if (t.image) setImgSrc(t.image)
-      if (t.statusColor) setStatusColor(t.statusColor)
-    })
-  }, [])
-
-  // 唤醒重置
-  useEffect(() => {
-    const handleSummon = () => {
-      setIsMinimized(false)
-      setPosition({ x: 500, y: 150 })
-      setSize({ width: 230, height: 190 })
+    if (isDashboard) {
+      setIsMinimized(true)
+      setPosition({ x: 8, y: 80 })
     }
-    window.addEventListener('summon-posture-deck', handleSummon)
-    return () => window.removeEventListener('summon-posture-deck', handleSummon)
+  }, [isDashboard])
+
+  // 全局鼠标事件
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (isDragging.current) {
+        setPosition({ x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y })
+      } else if (isResizing.current) {
+        const dx = e.clientX - resizeStart.current.x
+        const dy = e.clientY - resizeStart.current.y
+        const dir = resizeDir.current
+        let nw = resizeStart.current.w,
+          nh = resizeStart.current.h
+        let nx = resizeStart.current.px,
+          ny = resizeStart.current.py
+        if (dir.includes('e')) nw = resizeStart.current.w + dx
+        if (dir.includes('s')) nh = resizeStart.current.h + dy
+        if (dir.includes('w')) {
+          nw = resizeStart.current.w - dx
+          nx = resizeStart.current.px + dx
+        }
+        if (dir.includes('n')) {
+          nh = resizeStart.current.h - dy
+          ny = resizeStart.current.py + dy
+        }
+        setSize({
+          width: Math.max(180, Math.min(nw, 450)),
+          height: Math.max(140, Math.min(nh, 380))
+        })
+        setPosition({ x: nx, y: ny })
+      }
+    }
+    const onUp = () => {
+      isDragging.current = false
+      isResizing.current = false
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
   }, [])
 
-  // 1️⃣ 原生最直观的拖拽触发 (收起后不能移动)
-  const handleDragMouseDown = (e: React.MouseEvent) => {
-    if (isMinimized) return // 收起后封锁移动
-    setIsDragging(true)
-    dragStart.current = {
+  // 拖拽：整个容器任意位置都可拖
+  const onContainerMouseDown = (e: React.MouseEvent) => {
+    // 点到功能按钮时不触发拖拽
+    if ((e.target as HTMLElement).closest('button')) return
+    isDragging.current = true
+    dragOffset.current = {
       x: e.clientX - position.x,
       y: e.clientY - position.y
     }
     e.preventDefault()
   }
 
-  // 3️⃣ 八向区域大小收放自如触发
-  const handleResizeMouseDown = (e: React.MouseEvent, direction: string) => {
-    if (isMinimized) return
+  const onResize = (e: React.MouseEvent, dir: string) => {
     e.stopPropagation()
     e.preventDefault()
-    setIsResizing(true)
-    resizeDir.current = direction
+    isResizing.current = true
+    resizeDir.current = dir
     resizeStart.current = {
       x: e.clientX,
       y: e.clientY,
-      width: size.width,
-      height: size.height,
-      left: position.x,
-      top: position.y
+      w: size.width,
+      h: size.height,
+      px: position.x,
+      py: position.y
     }
   }
 
-  // 全局鼠标移动与抬起监听 (原生计算，彻底告别诡异动画)
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isDragging) {
-        // 丝滑跟手移动，没有任何缓冲和惯性
-        const nextX = Math.max(
-          0,
-          Math.min(e.clientX - dragStart.current.x, window.innerWidth - size.width)
-        )
-        const nextY = Math.max(
-          0,
-          Math.min(e.clientY - dragStart.current.y, window.innerHeight - size.height)
-        )
-        setPosition({ x: nextX, y: nextY })
-      } else if (isResizing) {
-        const dir = resizeDir.current
-        const deltaX = e.clientX - resizeStart.current.x
-        const deltaY = e.clientY - resizeStart.current.y
-
-        let newWidth = resizeStart.current.width
-        let newHeight = resizeStart.current.height
-        let newLeft = resizeStart.current.left
-        let newTop = resizeStart.current.top
-
-        // 水平拉伸计算
-        if (dir.includes('e')) {
-          newWidth = resizeStart.current.width + deltaX
-        } else if (dir.includes('w')) {
-          newWidth = resizeStart.current.width - deltaX
-          if (newWidth >= 180 && newWidth <= 450) {
-            newLeft = resizeStart.current.left + deltaX
-          }
-        }
-
-        // 垂直拉伸计算
-        if (dir.includes('s')) {
-          newHeight = resizeStart.current.height + deltaY
-        } else if (dir.includes('n')) {
-          newHeight = resizeStart.current.height - deltaY
-          if (newHeight >= 140 && newHeight <= 380) {
-            newTop = resizeStart.current.top + deltaY
-          }
-        }
-
-        // 约束边界
-        newWidth = Math.max(180, Math.min(newWidth, 450))
-        newHeight = Math.max(140, Math.min(newHeight, 380))
-
-        setSize({ width: newWidth, height: newHeight })
-        setPosition({ x: newLeft, y: newTop })
-      }
-    }
-
-    const handleMouseUp = () => {
-      setIsDragging(false)
-      setIsResizing(false)
-    }
-
-    if (isDragging || isResizing) {
-      window.addEventListener('mousemove', handleMouseMove)
-      window.addEventListener('mouseup', handleMouseUp)
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [isDragging, isResizing, size, position])
-
   const ringColor =
     statusColor === 'green'
-      ? 'border-emerald-300 shadow-emerald-100/50'
+      ? 'border-emerald-300'
       : statusColor === 'red'
-        ? 'border-rose-400 shadow-rose-100/60 animate-pulse'
-        : 'border-amber-300 shadow-amber-100/50'
+        ? 'border-rose-400 animate-pulse'
+        : 'border-amber-300'
+
+  const dotColor =
+    statusColor === 'green'
+      ? 'bg-emerald-500'
+      : statusColor === 'red'
+        ? 'bg-rose-500 animate-pulse'
+        : 'bg-amber-500'
 
   return (
     <div
+      ref={containerRef}
       style={{
-        left: `${position.x}px`,
-        top: `${position.y}px`,
-        width: isMinimized ? '106px' : `${size.width}px`,
-        height: isMinimized ? '116px' : `${size.height}px`,
-        position: 'absolute'
+        position: 'fixed',
+        left: position.x,
+        top: position.y,
+        width: isMinimized ? 120 : size.width,
+        height: isMinimized ? 64 : size.height,
+        zIndex: 999,
+        cursor: 'move'
       }}
-      className={`bg-white/95 border-2 ${ringColor} rounded-3xl shadow-xl p-2 z-[999] backdrop-blur-md select-none flex flex-col group overflow-hidden`}
+      className={`bg-white/95 border-2 ${ringColor} rounded-2xl shadow-xl backdrop-blur-md select-none flex flex-col overflow-hidden`}
+      onMouseDown={onContainerMouseDown}
     >
-      {/* 5️⃣ 顶部控制中轴：小把手往上提，与减号水平高度严密齐平 */}
-      <div className="w-full h-6 flex items-center justify-between shrink-0 px-1 relative mb-1">
-        {!isMinimized ? (
-          <>
-            {/* 居中拖拽把手 */}
-            <div
-              onMouseDown={handleDragMouseDown}
-              className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-400 cursor-move py-1 px-3 rounded-md hover:bg-slate-50 transition-colors"
-            >
-              <GripHorizontal size={14} />
-            </div>
-
-            {/* 右侧垂直居中的减号 */}
-            <button
-              onClick={() => setIsMinimized(true)}
-              className="ml-auto text-slate-400 hover:text-slate-600 cursor-pointer transition-colors p-0.5 rounded-md hover:bg-slate-100"
-            >
-              <Minus size={13} strokeWidth={3} />
-            </button>
-          </>
-        ) : null}
+      {/* 顶栏：状态点 + 最小化/展开 + 关闭 */}
+      <div className="w-full h-7 flex items-center justify-between px-2 shrink-0 bg-white/60">
+        <div className="flex items-center gap-1.5">
+          <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+          <span className="text-[10px] font-bold text-slate-500 font-mono">
+            {statusColor.toUpperCase()}
+          </span>
+        </div>
+        <div className="flex items-center gap-0.5">
+          <button
+            onClick={() => setIsMinimized((v) => !v)}
+            className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+          >
+            {isMinimized ? <Maximize2 size={11} /> : <Minus size={11} />}
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-colors"
+          >
+            <X size={11} />
+          </button>
+        </div>
       </div>
 
-      {/* 收起状态的界面表现：彻底封锁移动 */}
-      {isMinimized && (
-        <div
-          onClick={() => setIsMinimized(false)}
-          className="flex-1 w-full flex flex-col items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-50 rounded-2xl p-1"
-        >
-          <div
-            className={`p-2 rounded-full ${statusColor === 'green' ? 'bg-emerald-500' : 'bg-amber-500'} text-white shadow-xs`}
-          >
-            <Video size={13} />
-          </div>
-          <div className="text-[11px] font-black text-slate-700 font-mono tracking-wider">
-            {timeLeftStr}
-          </div>
+      {/* 内容区 */}
+      {isMinimized ? (
+        <div className="flex-1 flex items-center justify-center px-2 pb-1">
+          <div className={`w-2 h-2 rounded-full shrink-0 mr-1.5 ${dotColor}`} />
+          <span className="text-[11px] font-bold text-slate-600 font-mono">坐姿监测中</span>
         </div>
-      )}
-
-      {/* 展开状态的大画面及联动数据 */}
-      {!isMinimized && (
-        <div className="flex-1 w-full flex flex-col gap-2 overflow-hidden pointer-events-auto">
-          {/* 视频核心框 */}
-          <div className="relative aspect-video flex-1 rounded-xl overflow-hidden bg-slate-50 border border-slate-100 flex items-center justify-center">
+      ) : (
+        <div className="flex-1 flex flex-col gap-1.5 p-2 overflow-hidden">
+          {/* 视频画面 */}
+          <div className="flex-1 rounded-xl overflow-hidden bg-slate-100 min-h-0">
             {imgSrc ? (
-              <img
-                src={imgSrc}
-                alt="Stream"
-                // 4️⃣ 纯天然镜头：不做任何 scale 镜像翻转，顺向画面呈现
-                className="w-full h-full object-cover"
-              />
+              <img src={imgSrc} alt="posture" className="w-full h-full object-cover" />
             ) : (
-              <div className="text-[9px] text-slate-400 flex flex-col items-center gap-1">
-                <Video
-                  size={16}
-                  className={timerMode === 'break' ? 'text-emerald-500' : 'text-blue-500'}
-                />
-                <span>正在捕获健康姿态...</span>
+              <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 min-h-[80px]">
+                <Video size={18} className="text-slate-300" />
+                <span className="text-[9px] text-slate-400 font-mono">等待 AI 数据...</span>
               </div>
             )}
-            <div
-              className={`absolute top-1.5 left-1.5 px-1 py-0.5 rounded text-[8px] text-white font-mono font-bold ${
-                statusColor === 'green'
-                  ? 'bg-emerald-500'
-                  : statusColor === 'red'
-                    ? 'bg-rose-500 animate-pulse'
-                    : 'bg-amber-500'
-              }`}
-            >
-              {statusColor.toUpperCase()}
-            </div>
-          </div>
-
-          {/* 底部联动卡片 */}
-          <div className="flex justify-between items-center bg-slate-50 border border-slate-100 px-2.5 py-1 rounded-xl gap-2 shrink-0">
-            <div className="flex-1 min-w-0 text-left">
-              <div
-                className={`text-[14px] font-black font-mono tracking-wider text-center ${timerMode === 'break' ? 'text-emerald-600' : 'text-blue-600'}`}
-              >
-                {timeLeftStr}
-              </div>
-              <div className="text-[8px] text-slate-400 truncate text-center mt-0.5">
-                🎯 {taskText}
-              </div>
-            </div>
-            <div
-              className={`p-1.5 rounded-lg bg-white border border-slate-100 shadow-3xs ${timerMode === 'break' ? 'text-emerald-600' : 'text-blue-600'}`}
-            >
-              <Compass size={12} />
-            </div>
           </div>
         </div>
       )}
 
-      {/* 3️⃣ 极其灵敏的四边、四角（八向）全范围隐形拉伸边缘带 */}
+      {/* 缩放手柄（展开时才显示）*/}
       {!isMinimized && (
         <>
-          {/* 四个侧边拉伸带 */}
           <div
-            onMouseDown={(e) => handleResizeMouseDown(e, 'n')}
+            onMouseDown={(e) => onResize(e, 'n')}
             className="absolute top-0 left-3 right-3 h-1 cursor-n-resize z-50"
           />
           <div
-            onMouseDown={(e) => handleResizeMouseDown(e, 's')}
+            onMouseDown={(e) => onResize(e, 's')}
             className="absolute bottom-0 left-3 right-3 h-1 cursor-s-resize z-50"
           />
           <div
-            onMouseDown={(e) => handleResizeMouseDown(e, 'e')}
+            onMouseDown={(e) => onResize(e, 'e')}
             className="absolute top-3 bottom-3 right-0 w-1 cursor-e-resize z-50"
           />
           <div
-            onMouseDown={(e) => handleResizeMouseDown(e, 'w')}
+            onMouseDown={(e) => onResize(e, 'w')}
             className="absolute top-3 bottom-3 left-0 w-1 cursor-w-resize z-50"
           />
-
-          {/* 四个拐角拉伸点 */}
           <div
-            onMouseDown={(e) => handleResizeMouseDown(e, 'nw')}
-            className="absolute top-0 left-0 w-3 h-3 cursor-nw-resize z-50"
+            onMouseDown={(e) => onResize(e, 'se')}
+            className="absolute bottom-0 right-0 w-3 h-3 cursor-se-resize z-50"
           />
           <div
-            onMouseDown={(e) => handleResizeMouseDown(e, 'ne')}
-            className="absolute top-0 right-0 w-3 h-3 cursor-ne-resize z-50"
-          />
-          <div
-            onMouseDown={(e) => handleResizeMouseDown(e, 'sw')}
+            onMouseDown={(e) => onResize(e, 'sw')}
             className="absolute bottom-0 left-0 w-3 h-3 cursor-sw-resize z-50"
           />
           <div
-            onMouseDown={(e) => handleResizeMouseDown(e, 'se')}
-            className="absolute bottom-0 right-0 w-3 h-3 cursor-se-resize z-50"
+            onMouseDown={(e) => onResize(e, 'ne')}
+            className="absolute top-0 right-0 w-3 h-3 cursor-ne-resize z-50"
+          />
+          <div
+            onMouseDown={(e) => onResize(e, 'nw')}
+            className="absolute top-0 left-0 w-3 h-3 cursor-nw-resize z-50"
           />
         </>
       )}

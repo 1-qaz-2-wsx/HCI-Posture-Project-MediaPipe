@@ -3,8 +3,9 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
-  // 持续监听 Python 发来的坐姿数据（每帧触发一次）
   onPostureData: (callback: (telemetry: unknown) => void): void => {
+    // 先清理旧的，再注册新的，确保全局只有一个监听器
+    ipcRenderer.removeAllListeners('posture-data')
     ipcRenderer.on('posture-data', (_event, telemetry) => callback(telemetry))
   },
 

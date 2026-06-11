@@ -2,23 +2,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import confetti from 'canvas-confetti'
 
-function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) {
-      resolve()
-      return
-    }
-    const s = document.createElement('script')
-    s.src = src
-    s.crossOrigin = 'anonymous'
-    s.onload = () => resolve()
-    s.onerror = () => reject(new Error(`Failed to load ${src}`))
-    document.head.appendChild(s)
-  })
-}
-
-const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe'
-
 export default function GestureFireworks() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -32,19 +15,29 @@ export default function GestureFireworks() {
 
     async function init() {
       try {
-        // 按顺序加载三个脚本，window 上会挂载全局变量
-        await loadScript(`${CDN}/drawing_utils@0.3.1620248257/drawing_utils.js`)
-        await loadScript(`${CDN}/hands@0.4.1646424915/hands.js`)
-        await loadScript(`${CDN}/camera_utils@0.3.1640029074/camera_utils.js`)
+        // 1. 直接使用 ESM 动态导入，无需担心 window 全局变量挂载时机
+        const mpHands =
+          await import('https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js')
+        const mpCamera =
+          await import('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js')
+        const mpDrawing =
+          await import('https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js')
 
-        const w = window as any
-        const Hands = w.Hands
-        const Camera = w.Camera
-        const { drawConnectors, drawLandmarks, HAND_CONNECTIONS } = w
+        // 2. 从模块中提取核心类和方法（ESM 模块导出的类就在 .Hands / .Camera 下）
+        const HandsConstructor = mpHands.Hands
+        const CameraConstructor = mpCamera.Camera
+        const { drawConnectors, drawLandmarks, HAND_CONNECTIONS } = mpDrawing
 
-        const hands = new Hands({
-          locateFile: (f: string) => `${CDN}/hands@0.4.1646424915/${f}`
+        if (!HandsConstructor || !CameraConstructor) {
+          throw new Error('未能在 CDN 模块中找到对应的构造函数')
+        }
+
+        // 3. 实例化 Hands
+        const hands = new HandsConstructor({
+          locateFile: (f: string) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`
         })
+
         hands.setOptions({
           maxNumHands: 2,
           modelComplexity: 1,
@@ -92,18 +85,20 @@ export default function GestureFireworks() {
           }
         })
 
-        camera = new Camera(videoRef.current!, {
+        // 4. 实例化 Camera
+        camera = new CameraConstructor(videoRef.current!, {
           onFrame: async () => {
             await hands.send({ image: videoRef.current! })
           },
           width: 640,
           height: 480
         })
+
         await camera.start()
         setReady(true)
         setTip('将手放入画面，食指尖触发烟花 🎆')
       } catch (e) {
-        console.error(e)
+        console.error('MediaPipe 初始化错误:', e)
         setError(true)
         setTip('加载失败，请检查网络连接后刷新重试')
       }
@@ -131,7 +126,6 @@ export default function GestureFireworks() {
         className="flex-1 relative rounded-3xl overflow-hidden bg-slate-900"
         style={{ minHeight: 360 }}
       >
-        {/* video 元素隐藏，画面渲染到 canvas */}
         <video
           ref={videoRef}
           autoPlay
