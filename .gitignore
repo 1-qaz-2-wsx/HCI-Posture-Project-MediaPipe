@@ -5,9 +5,61 @@ venv/
 __pycache__/
 *.pyc
 
+# 排除 Python 编译缓存和解释器文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+
 # 忽略本地下载的 MediaPipe 大型二进制模型文件
 *.task
 
-# 忽略操作系统的临时文件
+
+# ==========================================
+# 1. Node.js & React (前端依赖与构建产物)
+# ==========================================
+node_modules/
+/dist/
+/out/
+.eslintcache
+.stylelintcache
+*.local
+.env
+.env.development
+.env.production
+
+
+# ==========================================
+# 3. Electron 打包产物
+# ==========================================
+release/
+build/
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.rpm
+
+
+# ==========================================
+# 4. 系统与编辑器缓存
+# ==========================================
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+
+
+
+
