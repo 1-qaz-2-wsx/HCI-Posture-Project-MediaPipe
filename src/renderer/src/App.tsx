@@ -21,7 +21,7 @@ const TAB_TITLES: Record<string, string> = {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<string>('focus')
+  const [activeTab, setActiveTab] = useState<string>('dashboard')
   const [tasks, setTasks] = useState<Task[]>([])
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
 
@@ -36,19 +36,7 @@ export default function App() {
   const [postureData, setPostureData] = useState<any>(null)
   const [showFloat, setShowFloat] = useState<boolean>(false)
 
-  // const [cameraOwner, setCameraOwner] = useState<'posture' | 'game'>('posture')
-
   const [gestureGameActive, setGestureGameActive] = useState(false)
-
-  // const handleCameraToGame = () => {
-  //   ;(window as any).api?.pausePosture?.()
-  //   setCameraOwner('game')
-  //   setPostureImg(null) // 清空画面，避免显示旧帧
-  // }
-  // const handleCameraToPosture = () => {
-  //   ;(window as any).api?.resumePosture?.()
-  //   setCameraOwner('posture')
-  // }
 
   useEffect(() => {
     const api = (window as any).api
@@ -89,14 +77,6 @@ export default function App() {
     const secs = seconds % 60
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
-
-  // 切换到其他页面时自动归还摄像头
-  // const handleTabChange = (tab: string) => {
-  //   if (cameraOwner === 'game' && tab !== 'relax') {
-  //     handleCameraToPosture()
-  //   }
-  //   setActiveTab(tab)
-  // }
 
   return (
     <div className="flex h-screen w-screen bg-slate-50 text-slate-800 overflow-hidden select-none font-sans relative">
