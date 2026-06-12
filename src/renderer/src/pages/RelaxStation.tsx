@@ -6,6 +6,12 @@ import BubbleWrap from './games/BubbleWrap'
 import GestureFireworks from './games/GestureFireworks'
 import NailPuller from './games/NailPuller'
 
+interface RelaxStationProps {
+  onCameraToGame: () => void
+  onCameraToPosture: () => void
+  cameraOwner: 'posture' | 'game'
+}
+
 type GameId = 'bubble' | 'gesture' | 'nail' | null
 
 const GAMES = [
@@ -38,8 +44,27 @@ const GAMES = [
   }
 ]
 
-export default function RelaxStation() {
+export default function RelaxStation({
+  onCameraToGame,
+  onCameraToPosture,
+  cameraOwner
+}: RelaxStationProps) {
   const [activeGame, setActiveGame] = useState<GameId>(null)
+
+  // 切换游戏时控制摄像头
+  const enterGame = (id: GameId) => {
+    if (id === 'gesture') {
+      onCameraToGame() // 发 pause，让 Python 释放摄像头
+    }
+    setActiveGame(id)
+  }
+
+  const exitGame = () => {
+    if (activeGame === 'gesture') {
+      onCameraToPosture() // 发 resume，Python 重新接管
+    }
+    setActiveGame(null)
+  }
 
   return (
     <div className="h-full flex flex-col select-none">
@@ -62,7 +87,7 @@ export default function RelaxStation() {
                   key={g.id}
                   whileHover={{ scale: 1.01 }}
                   whileTap={{ scale: 0.99 }}
-                  onClick={() => setActiveGame(g.id)}
+                  onClick={() => enterGame(g.id)}
                   className={`bg-gradient-to-r ${g.color} border ${g.border} rounded-3xl p-5 flex items-center gap-5 text-left transition-shadow hover:shadow-md`}
                 >
                   <span className="text-4xl">{g.emoji}</span>
@@ -86,7 +111,7 @@ export default function RelaxStation() {
             className="flex-1 flex flex-col gap-4"
           >
             <button
-              onClick={() => setActiveGame(null)}
+              onClick={() => exitGame}
               className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 w-fit"
             >
               <ArrowLeft size={14} />

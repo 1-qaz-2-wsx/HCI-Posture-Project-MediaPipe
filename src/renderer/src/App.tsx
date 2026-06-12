@@ -36,6 +36,18 @@ export default function App() {
   const [postureData, setPostureData] = useState<any>(null)
   const [showFloat, setShowFloat] = useState<boolean>(false)
 
+  const [cameraOwner, setCameraOwner] = useState<'posture' | 'game'>('posture')
+
+  const handleCameraToGame = () => {
+    ;(window as any).api?.pausePosture?.()
+    setCameraOwner('game')
+    setPostureImg(null) // 清空画面，避免显示旧帧
+  }
+  const handleCameraToPosture = () => {
+    ;(window as any).api?.resumePosture?.()
+    setCameraOwner('posture')
+  }
+
   useEffect(() => {
     const api = (window as any).api
     if (!api?.onPostureData) return
@@ -74,6 +86,14 @@ export default function App() {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+  }
+
+  // 切换到其他页面时自动归还摄像头
+  const handleTabChange = (tab: string) => {
+    if (cameraOwner === 'game' && tab !== 'relax') {
+      handleCameraToPosture()
+    }
+    setActiveTab(tab)
   }
 
   return (
@@ -165,7 +185,13 @@ export default function App() {
                   formatTime={formatTime}
                 />
               )}
-              {activeTab === 'relax' && <RelaxStation />}
+              {activeTab === 'relax' && (
+                <RelaxStation
+                  onCameraToGame={handleCameraToGame}
+                  onCameraToPosture={handleCameraToPosture}
+                  cameraOwner={cameraOwner}
+                />
+              )}
               {activeTab === 'profile' && <Profile />}
               {activeTab === 'todo' && (
                 <TodoList
@@ -187,6 +213,7 @@ export default function App() {
           statusColor={postureColor}
           isDashboard={activeTab === 'dashboard'}
           onClose={() => setShowFloat(false)}
+          isGameMode={cameraOwner === 'game'}
         />
       )}
       {/* ── 右下角唤醒按钮（悬浮窗关闭时显示）── */}

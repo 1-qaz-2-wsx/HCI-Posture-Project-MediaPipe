@@ -113,7 +113,8 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-base_options = python.BaseOptions(model_asset_path=MODEL_NAME)
+# Use the resolved MODEL_PATH from above
+base_options = python.BaseOptions(model_asset_path=MODEL_PATH)
 options = vision.PoseLandmarkerOptions(
     base_options=base_options,
     running_mode=vision.RunningMode.IMAGE
@@ -160,6 +161,42 @@ while True:
         cmd = command_queue.get_nowait()
     except queue.Empty:
         pass
+
+    # 暂停指令处理
+    if cmd == "pause":
+        cap.release()
+        # 告知前端摄像头已暂停
+        sys.stdout.write(json.dumps({
+            "hasUser": False,
+            "isCalibrated": is_calibrated,
+            "statusText": "STATUS: PAUSED (GAME MODE)",
+            "statusColor": "orange",
+            "score": score,
+            "angleDeviation": 0,
+            "zDeviation": 0,
+            "paused": True
+        }) + "\n")
+        sys.stdout.flush()
+
+        # 阻塞等待 resume 指令，期间不占用摄像头
+        while True:
+            try:
+                resume_cmd = command_queue.get(timeout=0.5)
+                if resume_cmd in ("resume", "q", "quit"):
+                    if resume_cmd in ("q", "quit"):
+                        cap.release()
+                        sys.exit(0)
+                    break
+            except queue.Empty:
+                continue
+        # 重新打开摄像头
+        cap = cv2.VideoCapture(0)
+        time.sleep(0.3)  # 给系统一点时间完全释放
+        continue  # 跳过本帧其余处理，直接进入下一帧
+
+    # quit 指令
+    if cmd in ("q", "quit"):
+        break
 
     img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)

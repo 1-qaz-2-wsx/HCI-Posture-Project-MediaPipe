@@ -17,6 +17,14 @@ const api = {
   // 组件卸载时清理监听器，防止内存泄漏
   removePostureListener: (): void => {
     ipcRenderer.removeAllListeners('posture-data')
+  },
+  // 暂停坐姿检测，释放摄像头给游戏用
+  pausePosture: (): void => {
+    ipcRenderer.send('posture-command', 'pause')
+  },
+  // 恢复坐姿检测
+  resumePosture: (): void => {
+    ipcRenderer.send('posture-command', 'resume')
   }
 }
 
