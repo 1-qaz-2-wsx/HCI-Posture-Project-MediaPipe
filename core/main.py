@@ -10,6 +10,7 @@ import threading
 import queue
 from collections import deque
 import base64
+import urllib.request
 
 # ================= 1. 核心数学函数 =================
 def calculate_angle_with_vertical(pt_upper, pt_lower):
@@ -43,18 +44,70 @@ def electron_stream_reader():
 
 threading.Thread(target=electron_stream_reader, daemon=True).start()
 
-# ================= 3. 初始化 MediaPipe =================
-MODEL_NAME = "pose_landmarker_full.task"
-if not os.path.exists(MODEL_NAME):
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    MODEL_NAME = os.path.join(script_dir, MODEL_NAME)
-    if not os.path.exists(MODEL_NAME):
+# ================= 3. 初始化 & 自动下载 MediaPipe 模型 =================
+
+# 1. 统一计算模型的绝对路径
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(SCRIPT_DIR, "pose_landmarker_full.task")
+MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task"
+
+# 2. 如果本地不存在模型，触发自动下载
+if not os.path.exists(MODEL_PATH):
+    try:
+        # 向前端发送下载中的状态，让 Electron 界面显示加载动画
         sys.stdout.write(json.dumps({
-            "hasUser": False, "statusColor": "red",
-            "statusText": "ERROR: 未找到模型文件 pose_landmarker_full.task"
+            "hasUser": False, 
+            "statusColor": "orange",
+            "statusText": "首次运行，正在后台下载 MediaPipe 姿态检测模型(约9MB)..."
+        }) + "\n")
+        sys.stdout.flush()
+        
+        # 执行下载
+        urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+        
+    except Exception as e:
+        # 如果断网或下载失败，安全退出并通知前端
+        sys.stdout.write(json.dumps({
+            "hasUser": False, 
+            "statusColor": "red",
+            "statusText": f"ERROR: 模型下载失败，请检查网络连接: {str(e)}"
         }) + "\n")
         sys.stdout.flush()
         sys.exit(1)
+
+# 3. 兜底验证：确保模型文件最终确实存在
+if not os.path.exists(MODEL_PATH):
+    sys.stdout.write(json.dumps({
+        "hasUser": False, 
+        "statusColor": "red",
+        "statusText": "ERROR: 未找到模型文件 pose_landmarker_full.task"
+    }) + "\n")
+    sys.stdout.flush()
+    sys.exit(1)
+
+# # 定义模型存放路径和官方安全下载链接
+# MODEL_NAME = os.path.join(os.path.dirname(__file__), "pose_landmarker_full.task")
+# MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task"
+
+# def init_mediapipe():
+#     if not os.path.exists(MODEL_NAME):
+#         print("首次运行，正在从 Google 官方下载 MediaPipe 姿态检测模型，请稍候...")
+#         # 自动下载并保存到 core/ 目录下
+#         urllib.request.urlretrieve(MODEL_URL, MODEL_NAME)
+#         print("模型下载成功！")
+
+# # ================= 3. 初始化 MediaPipe =================
+# MODEL_NAME = "pose_landmarker_full.task"
+# if not os.path.exists(MODEL_NAME):
+#     script_dir = os.path.dirname(os.path.abspath(__file__))
+#     MODEL_NAME = os.path.join(script_dir, MODEL_NAME)
+#     if not os.path.exists(MODEL_NAME):
+#         sys.stdout.write(json.dumps({
+#             "hasUser": False, "statusColor": "red",
+#             "statusText": "ERROR: 未找到模型文件 pose_landmarker_full.task"
+#         }) + "\n")
+#         sys.stdout.flush()
+#         sys.exit(1)
 
 import mediapipe as mp
 from mediapipe.tasks import python
