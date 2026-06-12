@@ -44,25 +44,17 @@ const GAMES = [
   }
 ]
 
-export default function RelaxStation({
-  onCameraToGame,
-  onCameraToPosture,
-  cameraOwner
-}: RelaxStationProps) {
+export default function RelaxStation({}: RelaxStationProps) {
   const [activeGame, setActiveGame] = useState<GameId>(null)
 
-  // 切换游戏时控制摄像头
   const enterGame = (id: GameId) => {
-    if (id === 'gesture') {
-      onCameraToGame() // 发 pause，让 Python 释放摄像头
-    }
+    // 手势游戏：让 Python 切换到手势检测模式，不需要释放摄像头
+    // GestureFireworks 组件内部的 useEffect 会自动调用 api.switchToGesture()
     setActiveGame(id)
   }
 
   const exitGame = () => {
-    if (activeGame === 'gesture') {
-      onCameraToPosture() // 发 resume，Python 重新接管
-    }
+    // GestureFireworks 的 useEffect 清理函数会自动调用 api.switchToPosture()
     setActiveGame(null)
   }
 

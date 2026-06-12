@@ -33,13 +33,17 @@ function startPythonProcess(mainWindow: BrowserWindow): void {
       if (!line.trim()) continue
 
       if (line.startsWith('IMG:')) {
-        // 这是图片行，和之前暂存的 JSON 合并后一起推给前端
+        // 图片行，和之前暂存的 JSON 合并后一起推给前端
         if (pendingTelemetry && !mainWindow.isDestroyed()) {
           const imgDataUrl = 'data:image/jpeg;base64,' + line.slice(4)
-          mainWindow.webContents.send('posture-data', {
-            ...pendingTelemetry,
-            image: imgDataUrl
-          })
+          const payload = { ...pendingTelemetry, image: imgDataUrl }
+          // 根据 type 发到不同的 IPC 频道，前端按需监听
+          const type = (pendingTelemetry as any).type
+          if (type === 'gesture') {
+            mainWindow.webContents.send('gesture-data', payload)
+          } else {
+            mainWindow.webContents.send('posture-data', payload)
+          }
           pendingTelemetry = null
         }
       } else {

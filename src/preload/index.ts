@@ -8,6 +8,10 @@ const api = {
     ipcRenderer.removeAllListeners('posture-data')
     ipcRenderer.on('posture-data', (_event, telemetry) => callback(telemetry))
   },
+  onGestureData: (callback: (data: unknown) => void): void => {
+    ipcRenderer.removeAllListeners('gesture-data')
+    ipcRenderer.on('gesture-data', (_event, data) => callback(data))
+  },
 
   // 向 Python 发送指令（校准用 'c'，退出用 'q'）
   sendPostureCommand: (command: string): void => {
@@ -18,14 +22,24 @@ const api = {
   removePostureListener: (): void => {
     ipcRenderer.removeAllListeners('posture-data')
   },
-  // 暂停坐姿检测，释放摄像头给游戏用
-  pausePosture: (): void => {
-    ipcRenderer.send('posture-command', 'pause')
+  removeGestureListener: (): void => {
+    ipcRenderer.removeAllListeners('gesture-data')
   },
-  // 恢复坐姿检测
-  resumePosture: (): void => {
-    ipcRenderer.send('posture-command', 'resume')
+
+  switchToGesture: (): void => {
+    ipcRenderer.send('posture-command', 'gesture')
+  },
+  switchToPosture: (): void => {
+    ipcRenderer.send('posture-command', 'posture')
   }
+  // // 暂停坐姿检测，释放摄像头给游戏用
+  // pausePosture: (): void => {
+  //   ipcRenderer.send('posture-command', 'pause')
+  // },
+  // // 恢复坐姿检测
+  // resumePosture: (): void => {
+  //   ipcRenderer.send('posture-command', 'resume')
+  // }
 }
 
 if (process.contextIsolated) {

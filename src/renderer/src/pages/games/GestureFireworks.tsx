@@ -1,169 +1,209 @@
 // src/renderer/src/pages/games/GestureFireworks.tsx
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useCallback } from 'react'
 import confetti from 'canvas-confetti'
 
-function loadScript(src: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) {
-      resolve()
-      return
-    }
-    const s = document.createElement('script')
-    s.src = src
-    s.crossOrigin = 'anonymous'
-    s.onload = () => resolve()
-    s.onerror = () => reject(new Error(`Failed to load ${src}`))
-    document.head.appendChild(s)
-  })
+const HAND_CONNECTIONS = [
+  [0, 1],
+  [1, 2],
+  [2, 3],
+  [3, 4],
+  [0, 5],
+  [5, 6],
+  [6, 7],
+  [7, 8],
+  [0, 9],
+  [9, 10],
+  [10, 11],
+  [11, 12],
+  [0, 13],
+  [13, 14],
+  [14, 15],
+  [15, 16],
+  [0, 17],
+  [17, 18],
+  [18, 19],
+  [19, 20],
+  [5, 9],
+  [9, 13],
+  [13, 17]
+]
+
+interface Landmark {
+  x: number
+  y: number
+  z: number
+}
+interface GestureFrame {
+  type: 'gesture'
+  hands: Landmark[][]
+  image: string
 }
 
-const CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe'
+// 判断手是否张开：五根手指末端都高于（y更小）各自的指根
+function isHandOpen(lms: Landmark[]): boolean {
+  // 拇指：横向判断，末端 x 离掌心更远
+  // 其余四指：纵向判断，末端 y 更小（更靠近屏幕顶部）
+  const thumbOpen = Math.abs(lms[4].x - lms[2].x) > 0.06
+  const indexOpen = lms[8].y < lms[6].y
+  const middleOpen = lms[12].y < lms[10].y
+  const ringOpen = lms[16].y < lms[14].y
+  const pinkyOpen = lms[20].y < lms[18].y
+  return thumbOpen && indexOpen && middleOpen && ringOpen && pinkyOpen
+}
 
 export default function GestureFireworks() {
-  const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const lastFire = useRef(0)
-  const [tip, setTip] = useState('正在加载 MediaPipe Hands...')
+  const imgRef = useRef<HTMLImageElement>(new Image())
+  const lastFire = useRef<number>(0)
   const [ready, setReady] = useState(false)
-  const [error, setError] = useState(false)
+  const [tip, setTip] = useState('正在启动手势检测...')
+  // 当前是否检测到张开的手，用于 UI 反馈
+  const [openHands, setOpenHands] = useState(0)
 
-  useEffect(() => {
-    let camera: any
+  const drawHands = useCallback(
+    (ctx: CanvasRenderingContext2D, hands: Landmark[][], w: number, h: number) => {
+      let openCount = 0
 
-    async function init() {
-      try {
-        // 按顺序加载三个脚本，window 上会挂载全局变量
-        await loadScript(`${CDN}/drawing_utils@0.3.1620248257/drawing_utils.js`)
-        await loadScript(`${CDN}/hands@0.4.1646424915/hands.js`)
-        await loadScript(`${CDN}/camera_utils@0.3.1640029074/camera_utils.js`)
-        // 按顺序加载三个脚本
-        await loadScript(`${CDN}/drawing_utils@0.3.1620248257/drawing_utils.js`)
-        await loadScript(`${CDN}/hands@0.4.1646424915/hands.js`)
-        await loadScript(`${CDN}/camera_utils@0.3.1640029074/camera_utils.js`)
+      for (const landmarks of hands) {
+        const open = isHandOpen(landmarks)
+        if (open) openCount++
 
-        const w = window as any
+        // 张开的手用白色高亮，握拳/其他手势用灰色
+        const lineColor = open ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.25)'
+        const dotColor = open ? '#ffffff' : 'rgba(255,255,255,0.3)'
 
-        // 1. 核心修正：MediaPipe 在 window 上的全局命名空间其实是 mpHands 和 mpCamera
-        const mpHands = w.mpHands || w.Hands
-        const mpCamera = w.mpCamera || w.Camera
-
-        if (!mpHands || !mpCamera) {
-          throw new Error('MediaPipe 脚本加载成功，但未找到全局对象，请检查 CDN 版本。')
+        ctx.strokeStyle = lineColor
+        ctx.lineWidth = open ? 2 : 1
+        for (const [a, b] of HAND_CONNECTIONS) {
+          ctx.beginPath()
+          ctx.moveTo(landmarks[a].x * w, landmarks[a].y * h)
+          ctx.lineTo(landmarks[b].x * w, landmarks[b].y * h)
+          ctx.stroke()
         }
 
-        // 2. 提取真正的构造函数
-        const HandsConstructor = mpHands.Hands || mpHands
-        const CameraConstructor = mpCamera.Camera || mpCamera
+        for (const lm of landmarks) {
+          ctx.beginPath()
+          ctx.arc(lm.x * w, lm.y * h, open ? 5 : 3, 0, Math.PI * 2)
+          ctx.fillStyle = dotColor
+          ctx.fill()
+        }
 
-        // 提取绘制工具
-        const drawConnectors = w.drawConnectors || w.mpDrawing?.drawConnectors
-        const drawLandmarks = w.drawLandmarks || w.mpDrawing?.drawLandmarks
-        const HAND_CONNECTIONS = w.HAND_CONNECTIONS || w.mpHands?.HAND_CONNECTIONS
-
-        // 3. 实例化
-        const hands = new HandsConstructor({
-          locateFile: (f: string) => `${CDN}/hands@0.4.1646424915/${f}`
-        })
-        hands.onResults((results: any) => {
-          const canvas = canvasRef.current
-          const video = videoRef.current
-          if (!canvas || !video) return
-          const ctx = canvas.getContext('2d')!
-          canvas.width = video.videoWidth || 640
-          canvas.height = video.videoHeight || 480
-
-          // 镜像绘制视频帧
-          ctx.save()
-          ctx.clearRect(0, 0, canvas.width, canvas.height)
-          ctx.scale(-1, 1)
-          ctx.translate(-canvas.width, 0)
-          ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height)
-          ctx.restore()
-
-          if (results.multiHandLandmarks) {
-            for (const lm of results.multiHandLandmarks) {
-              drawConnectors(ctx, lm, HAND_CONNECTIONS, {
-                color: 'rgba(255,255,255,0.35)',
-                lineWidth: 1
+        // 只有张开手才触发烟花，冷却 600ms（避免持续张手刷屏）
+        if (open) {
+          const now = Date.now()
+          if (now - lastFire.current > 600) {
+            lastFire.current = now
+            // 用手掌中心（第9点，中指根部）作为烟花位置
+            const palm = landmarks[9]
+            confetti({
+              particleCount: 100,
+              spread: 120,
+              origin: { x: palm.x, y: palm.y },
+              colors: ['#FF6B9D', '#A78BFA', '#60A5FA', '#34D399', '#FBBF24', '#FF8C42']
+            })
+            // 同时从手掌位置再发一波小烟花增强效果
+            setTimeout(() => {
+              confetti({
+                particleCount: 40,
+                spread: 60,
+                origin: { x: palm.x, y: palm.y },
+                startVelocity: 20,
+                gravity: 0.8,
+                colors: ['#fff', '#FFD700']
               })
-              drawLandmarks(ctx, lm, { color: '#fff', lineWidth: 1, radius: 4 })
-
-              // 食指尖 (index 8) 触发烟花，每 400ms 最多一次
-              const tip8 = lm[8]
-              const now = Date.now()
-              if (now - lastFire.current > 400) {
-                lastFire.current = now
-                confetti({
-                  particleCount: 70,
-                  spread: 90,
-                  origin: { x: 1 - tip8.x, y: tip8.y },
-                  colors: ['#FF6B9D', '#A78BFA', '#60A5FA', '#34D399', '#FBBF24']
-                })
-              }
-            }
+            }, 150)
           }
-        })
-
-        camera = new CameraConstructor(videoRef.current!, {
-          onFrame: async () => {
-            await hands.send({ image: videoRef.current! })
-          },
-          width: 640,
-          height: 480
-        })
-        await camera.start()
-        setReady(true)
-        setTip('将手放入画面，食指尖触发烟花 🎆')
-      } catch (e) {
-        console.error(e)
-        setError(true)
-        setTip('加载失败，请检查网络连接后刷新重试')
+        }
       }
-    }
 
-    init()
+      setOpenHands(openCount)
+    },
+    []
+  )
+
+  useEffect(() => {
+    const api = (window as any).api
+    if (!api) return
+
+    api.switchToGesture?.()
+    setReady(true)
+    setTip('张开手掌触发烟花 🎆  握拳或其他手势无效')
+
+    api.onGestureData((frame: GestureFrame) => {
+      const canvas = canvasRef.current
+      if (!canvas || !frame.image) return
+      const ctx = canvas.getContext('2d')!
+      const w = canvas.width
+      const h = canvas.height
+
+      imgRef.current.onload = () => {
+        ctx.clearRect(0, 0, w, h)
+        ctx.drawImage(imgRef.current, 0, 0, w, h)
+        if (frame.hands?.length > 0) {
+          drawHands(ctx, frame.hands, w, h)
+        } else {
+          setOpenHands(0)
+        }
+      }
+      imgRef.current.src = frame.image
+    })
+
     return () => {
-      try {
-        camera?.stop()
-      } catch (_) {}
+      api.switchToPosture?.()
+      api.removeGestureListener?.()
     }
-  }, [])
+  }, [drawHands])
 
   return (
     <div className="flex-1 flex flex-col gap-3">
-      <p
-        className={`text-sm font-medium text-center ${
-          error ? 'text-rose-500' : ready ? 'text-emerald-600' : 'text-slate-400'
-        }`}
-      >
-        {tip}
-      </p>
+      {/* 状态提示 */}
+      <div className="flex items-center justify-center gap-3">
+        <p className={`text-sm font-medium ${ready ? 'text-emerald-600' : 'text-slate-400'}`}>
+          {tip}
+        </p>
+        {/* 实时手势状态指示 */}
+        {ready && (
+          <div
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold transition-all ${
+              openHands > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'
+            }`}
+          >
+            <span>{openHands > 0 ? '🖐️' : '✊'}</span>
+            <span>{openHands > 0 ? `检测到 ${openHands} 只张开的手` : '未检测到张开手势'}</span>
+          </div>
+        )}
+      </div>
 
       <div
         className="flex-1 relative rounded-3xl overflow-hidden bg-slate-900"
         style={{ minHeight: 360 }}
       >
-        {/* video 元素隐藏，画面渲染到 canvas */}
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover opacity-0 pointer-events-none"
+        <canvas
+          ref={canvasRef}
+          width={640}
+          height={480}
+          className="absolute inset-0 w-full h-full object-cover"
         />
-        <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
-
-        {!ready && !error && (
+        {!ready && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
             <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            <p className="text-white/50 text-xs">首次加载约需 10 秒，请稍候</p>
+            <p className="text-white/50 text-xs">正在切换到手势检测模式...</p>
           </div>
         )}
-        {error && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-white/50 text-sm">❌ 加载失败，请检查网络</p>
-          </div>
+        {/* 张开手时的全屏光晕提示 */}
+        {openHands > 0 && (
+          <div
+            className="absolute inset-0 pointer-events-none rounded-3xl"
+            style={{ boxShadow: 'inset 0 0 40px rgba(255,255,255,0.15)' }}
+          />
         )}
+      </div>
+
+      {/* 底部使用说明 */}
+      <div className="flex items-center justify-center gap-6 text-xs text-slate-400">
+        <span>🖐️ 张开手掌 → 触发烟花</span>
+        <span>✊ 握拳 → 无效果</span>
+        <span>🤞 其他手势 → 无效果</span>
       </div>
     </div>
   )

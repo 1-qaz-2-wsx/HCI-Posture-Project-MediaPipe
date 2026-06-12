@@ -28,13 +28,13 @@ export default function PostureFloatDeck({
   const resizeDir = useRef('')
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // 进入坐姿看板时自动折叠到左上方      待优化：自动关闭
+  // 进入坐姿看板时自动折叠到左上方
   useEffect(() => {
-    if (isDashboard) {
+    if (isDashboard || isGameMode) {
       setIsMinimized(true)
-      setPosition({ x: 8, y: 80 })
+      setPosition({ x: 750, y: 80 })
     }
-  }, [isDashboard])
+  }, [isDashboard, isGameMode])
 
   // 全局鼠标事件
   useEffect(() => {
