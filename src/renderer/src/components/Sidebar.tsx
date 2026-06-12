@@ -18,10 +18,12 @@ interface SidebarProps {
 export default function Sidebar({ activeTab, setActiveTab }: SidebarProps) {
   const menuItems: MenuItem[] = [
     { id: 'dashboard', name: '坐姿看板', sub: '实时骨骼检测', icon: LayoutDashboard },
+    { id: 'todo', name: '待办清单', sub: '任务管理', icon: CheckSquare },
+
     { id: 'focus', name: '专注舱', sub: '番茄 + 任务 + 坐姿', icon: Zap },
     { id: 'relax', name: '解压舱', sub: '三款解压小游戏', icon: Gamepad2 },
-    { id: 'profile', name: '健康档案', sub: '数据与成就', icon: User },
-    { id: 'todo', name: '待办清单', sub: '任务管理', icon: CheckSquare }
+
+    { id: 'profile', name: '健康档案', sub: '数据与成就', icon: User }
   ]
 
   return (

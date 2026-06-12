@@ -17,7 +17,6 @@ export default function PostureFloatDeck({
   isDashboard,
   isGestureMode,
   onClose
-  // isGameMode
 }: PostureFloatDeckProps) {
   const [position, setPosition] = useState({ x: 740, y: 80 })
   const [size, setSize] = useState({ width: 230, height: 190 })
@@ -30,7 +29,7 @@ export default function PostureFloatDeck({
   const resizeDir = useRef('')
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // 进入坐姿看板时自动折叠到左上方
+  // 自动折叠到右上方
   useEffect(() => {
     if (isDashboard || isGestureMode) {
       setIsMinimized(true)
