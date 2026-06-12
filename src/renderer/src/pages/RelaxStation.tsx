@@ -103,7 +103,7 @@ export default function RelaxStation({}: RelaxStationProps) {
             className="flex-1 flex flex-col gap-4"
           >
             <button
-              onClick={() => exitGame}
+              onClick={() => exitGame()}
               className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 w-fit"
             >
               <ArrowLeft size={14} />
