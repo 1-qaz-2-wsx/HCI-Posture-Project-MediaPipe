@@ -7,9 +7,8 @@ import GestureFireworks from './games/GestureFireworks'
 import NailPuller from './games/NailPuller'
 
 interface RelaxStationProps {
-  onCameraToGame: () => void
-  onCameraToPosture: () => void
-  cameraOwner: 'posture' | 'game'
+  onGestureEnter: () => void
+  onGestureExit: () => void
 }
 
 type GameId = 'bubble' | 'gesture' | 'nail' | null
@@ -44,17 +43,18 @@ const GAMES = [
   }
 ]
 
-export default function RelaxStation({}: RelaxStationProps) {
+export default function RelaxStation({ onGestureEnter, onGestureExit }: RelaxStationProps) {
   const [activeGame, setActiveGame] = useState<GameId>(null)
 
   const enterGame = (id: GameId) => {
-    // 手势游戏：让 Python 切换到手势检测模式，不需要释放摄像头
-    // GestureFireworks 组件内部的 useEffect 会自动调用 api.switchToGesture()
+    // 只有进入手势游戏时才切换摄像头数据流
+    if (id === 'gesture') onGestureEnter()
     setActiveGame(id)
   }
 
   const exitGame = () => {
-    // GestureFireworks 的 useEffect 清理函数会自动调用 api.switchToPosture()
+    // 退出游戏时恢复摄像头数据流，回到坐姿监测
+    if (activeGame === 'gesture') onGestureExit()
     setActiveGame(null)
   }
 

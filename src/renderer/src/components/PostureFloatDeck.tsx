@@ -5,17 +5,19 @@ import { GripHorizontal, Minus, Maximize2, X, Video } from 'lucide-react'
 interface PostureFloatDeckProps {
   imgSrc: string | null
   statusColor: 'green' | 'orange' | 'red'
-  isDashboard: boolean // 进入坐姿看板时自动折叠并靠左
+  isDashboard: boolean // 进入坐姿看板时自动折叠
+  isGestureMode: boolean // 手势游戏模式下不显示视频画面
   onClose: () => void
-  isGameMode: boolean
+  // isGameMode: boolean
 }
 
 export default function PostureFloatDeck({
   imgSrc,
   statusColor,
   isDashboard,
-  onClose,
-  isGameMode
+  isGestureMode,
+  onClose
+  // isGameMode
 }: PostureFloatDeckProps) {
   const [position, setPosition] = useState({ x: 740, y: 80 })
   const [size, setSize] = useState({ width: 230, height: 190 })
@@ -30,11 +32,11 @@ export default function PostureFloatDeck({
 
   // 进入坐姿看板时自动折叠到左上方
   useEffect(() => {
-    if (isDashboard || isGameMode) {
+    if (isDashboard || isGestureMode) {
       setIsMinimized(true)
       setPosition({ x: 750, y: 80 })
     }
-  }, [isDashboard, isGameMode])
+  }, [isDashboard, isGestureMode])
 
   // 全局鼠标事件
   useEffect(() => {
@@ -168,18 +170,8 @@ export default function PostureFloatDeck({
         <div className="flex-1 flex flex-col gap-1.5 p-2 overflow-hidden">
           {/* 视频画面 */}
           <div className="flex-1 rounded-xl overflow-hidden bg-slate-100 min-h-0">
-            {isGameMode ? (
-              // 游戏占用摄像头时的友好提示
-              <div className="w-full h-full flex flex-col items-center justify-center gap-2 min-h-[80px] bg-indigo-50">
-                <span className="text-lg">🎮</span>
-                <span className="text-[9px] text-indigo-400 font-bold font-mono text-center px-2">
-                  摄像头已移交
-                  <br />
-                  手势游戏使用
-                </span>
-              </div>
-            ) : imgSrc ? (
-              <img src={imgSrc} alt="posture" className="w-full h-full object-cover" />
+            {imgSrc ? (
+              <img src={imgSrc ?? undefined} alt="posture" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 min-h-[80px]">
                 <Video size={18} className="text-slate-300" />

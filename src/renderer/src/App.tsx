@@ -36,17 +36,19 @@ export default function App() {
   const [postureData, setPostureData] = useState<any>(null)
   const [showFloat, setShowFloat] = useState<boolean>(false)
 
-  const [cameraOwner, setCameraOwner] = useState<'posture' | 'game'>('posture')
+  // const [cameraOwner, setCameraOwner] = useState<'posture' | 'game'>('posture')
 
-  const handleCameraToGame = () => {
-    ;(window as any).api?.pausePosture?.()
-    setCameraOwner('game')
-    setPostureImg(null) // 清空画面，避免显示旧帧
-  }
-  const handleCameraToPosture = () => {
-    ;(window as any).api?.resumePosture?.()
-    setCameraOwner('posture')
-  }
+  const [gestureGameActive, setGestureGameActive] = useState(false)
+
+  // const handleCameraToGame = () => {
+  //   ;(window as any).api?.pausePosture?.()
+  //   setCameraOwner('game')
+  //   setPostureImg(null) // 清空画面，避免显示旧帧
+  // }
+  // const handleCameraToPosture = () => {
+  //   ;(window as any).api?.resumePosture?.()
+  //   setCameraOwner('posture')
+  // }
 
   useEffect(() => {
     const api = (window as any).api
@@ -89,12 +91,12 @@ export default function App() {
   }
 
   // 切换到其他页面时自动归还摄像头
-  const handleTabChange = (tab: string) => {
-    if (cameraOwner === 'game' && tab !== 'relax') {
-      handleCameraToPosture()
-    }
-    setActiveTab(tab)
-  }
+  // const handleTabChange = (tab: string) => {
+  //   if (cameraOwner === 'game' && tab !== 'relax') {
+  //     handleCameraToPosture()
+  //   }
+  //   setActiveTab(tab)
+  // }
 
   return (
     <div className="flex h-screen w-screen bg-slate-50 text-slate-800 overflow-hidden select-none font-sans relative">
@@ -187,9 +189,8 @@ export default function App() {
               )}
               {activeTab === 'relax' && (
                 <RelaxStation
-                  onCameraToGame={handleCameraToGame}
-                  onCameraToPosture={handleCameraToPosture}
-                  cameraOwner={cameraOwner}
+                  onGestureEnter={() => setGestureGameActive(true)}
+                  onGestureExit={() => setGestureGameActive(false)}
                 />
               )}
               {activeTab === 'profile' && <Profile />}
@@ -213,7 +214,8 @@ export default function App() {
           statusColor={postureColor}
           isDashboard={activeTab === 'dashboard'}
           onClose={() => setShowFloat(false)}
-          isGameMode={cameraOwner === 'game'}
+          isGestureMode={gestureGameActive}
+          // isGameMode={activeTab === 'relax'}
         />
       )}
       {/* ── 右下角唤醒按钮（悬浮窗关闭时显示）── */}
